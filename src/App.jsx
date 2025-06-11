@@ -3,6 +3,8 @@ import SigmaNetwork from './SigmaNetwork.jsx';
 import { useState, useEffect, useRef } from 'react';
 import Papa from 'papaparse';
 
+const base = import.meta.env.BASE_URL;
+
 function App() {
   const [graphmlString, setGraphmlString] = useState('');
   const [edgeListString, setEdgeListString] = useState('');
@@ -111,7 +113,7 @@ function App() {
     setLoadingStatus('Initializing Metadata CSV load...');
     
     try {
-      const response = await fetch('/data/scatter_small.csv');
+      const response = await fetch(`${base}data/scatter_small.csv`);
       
       if (!response.ok) {
         throw new Error('Failed to fetch CSV file');
@@ -245,7 +247,7 @@ function App() {
     setLoadingStatus('Initializing large CSV load...');
     
     try {
-      const response = await fetch('/data/scatter_small.csv'); // This should be the 97MB file
+      const response = await fetch(`${base}data/scatter_small.csv`); // This should be the 97MB file
       
       if (!response.ok) {
         throw new Error('Failed to fetch large CSV file');
@@ -678,8 +680,6 @@ function App() {
       setIsLoading(false);
     };
     reader.onerror = () => {
-      console.error('Error reading TSV file');
-      setIsLoading(false);
     };
     reader.readAsText(file);
   };
@@ -721,7 +721,7 @@ function App() {
         setLoadingStatus('Initializing TSV metadata load...');
         try {
           // 1. Load metadata TSV
-          const response = await fetch('/data/scatter_small.tsv');
+          const response = await fetch(import.meta.env.BASE_URL + 'data/scatter_small.tsv');
           if (!response.ok) throw new Error('Failed to fetch TSV metadata file');
           const contentLength = parseInt(response.headers.get('content-length') || '0');
           const reader = response.body.getReader();
