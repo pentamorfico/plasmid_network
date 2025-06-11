@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Ignore data folder to avoid committing duplicate data files in source
+/src/data
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
