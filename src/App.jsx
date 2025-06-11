@@ -3,8 +3,6 @@ import SigmaNetwork from './SigmaNetwork.jsx';
 import { useState, useEffect, useRef } from 'react';
 import Papa from 'papaparse';
 
-const base = import.meta.env.BASE_URL;
-
 function App() {
   const [graphmlString, setGraphmlString] = useState('');
   const [edgeListString, setEdgeListString] = useState('');
@@ -721,6 +719,7 @@ function App() {
         setLoadingStatus('Initializing TSV metadata load...');
         try {
           // 1. Load metadata TSV
+          console.log('Loading mock metadata from ', import.meta.env.BASE_URL + 'data/scatter_small.tsv');
           const response = await fetch(import.meta.env.BASE_URL + 'data/scatter_small.tsv');
           if (!response.ok) throw new Error('Failed to fetch TSV metadata file');
           const contentLength = parseInt(response.headers.get('content-length') || '0');
@@ -783,6 +782,7 @@ function App() {
           setLoadingStatus('Node info loaded, now loading edges...');
           setLoadingProgress(0);
           // 2. Load network edge list (mock_edges.tsv)
+          console.log('Loading mock edge list from ', import.meta.env.BASE_URL + 'data/mock_edges.tsv');
           const tsvResponse = await fetch(import.meta.env.BASE_URL + 'data/mock_edges.tsv');
           if (!tsvResponse.ok) throw new Error('Failed to fetch TSV edge list');
           const tsvContentLength = parseInt(tsvResponse.headers.get('content-length') || '0');
