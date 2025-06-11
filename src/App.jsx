@@ -783,7 +783,7 @@ function App() {
           setLoadingStatus('Node info loaded, now loading edges...');
           setLoadingProgress(0);
           // 2. Load network edge list (mock_edges.tsv)
-          const tsvResponse = await fetch('/data/mock_edges.tsv');
+          const tsvResponse = await fetch(import.meta.env.BASE_URL + 'data/mock_edges.tsv');
           if (!tsvResponse.ok) throw new Error('Failed to fetch TSV edge list');
           const tsvContentLength = parseInt(tsvResponse.headers.get('content-length') || '0');
           const tsvReader = tsvResponse.body.getReader();
