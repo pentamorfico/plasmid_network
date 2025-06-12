@@ -90,6 +90,51 @@ function SigmaNetwork({
       });
       // Extract communities once graph is live
       handleCommunities(graph);
+
+      // --- PTU cluster labels overlay ---
+      const renderer = sigmaInstance.current;
+      // Remove existing labels layer if present
+      let labelsLayer = containerRef.current.querySelector('#ptuLabels');
+      if (labelsLayer) labelsLayer.remove();
+      labelsLayer = document.createElement('div');
+      labelsLayer.id = 'ptuLabels';
+      // Group node positions by new_PTU attribute
+      const ptuMap = {};
+      graph.forEachNode((node, attr) => {
+        const ptu = attr.new_PTU;
+        if (!ptu) return;
+        if (!ptuMap[ptu]) ptuMap[ptu] = { positions: [], color: palette[ptu] || '#000', label: ptu };
+        ptuMap[ptu].positions.push({ x: attr.x, y: attr.y });
+      });
+      let html = '';
+      Object.values(ptuMap).forEach(cluster => {
+        // compute average position
+        const avg = cluster.positions.reduce((acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }), { x: 0, y: 0 });
+        avg.x /= cluster.positions.length;
+        avg.y /= cluster.positions.length;
+        const vp = renderer.graphToViewport(avg);
+        html += `<div id="ptu-${cluster.label}" class="ptuLabel" ` +
+                `style="position:absolute;top:${vp.y}px;left:${vp.x}px;` +
+                `color:${cluster.color};font-size:12px;pointer-events:none;">` +
+                `${cluster.label}</div>`;
+      });
+      labelsLayer.innerHTML = html;
+      // Insert under hover layer
+      containerRef.current.insertBefore(labelsLayer, containerRef.current.querySelector('.sigma-hovers'));
+      // Update labels on every render
+      renderer.on('afterRender', () => {
+        Object.values(ptuMap).forEach(cluster => {
+          const avg = cluster.positions.reduce((acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }), { x: 0, y: 0 });
+          avg.x /= cluster.positions.length;
+          avg.y /= cluster.positions.length;
+          const vp = renderer.graphToViewport(avg);
+          const el = document.getElementById(`ptu-${cluster.label}`);
+          if (el) {
+            el.style.top = `${vp.y}px`;
+            el.style.left = `${vp.x}px`;
+          }
+        });
+      });
     }
   };
 
