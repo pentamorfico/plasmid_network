@@ -13,7 +13,9 @@
   },
   "dependencies": {
     "@sigma/edge-curve": "^3.1.0",
+    "@sigma/export-image": "^3.0.0",
     "@sigma/layer-webgl": "^3.0.0",
+    "dicopal": "^0.8.1",
     "graphology": "^0.26.0",
     "graphology-communities-louvain": "^2.0.2",
     "graphology-graphml": "^0.5.2",

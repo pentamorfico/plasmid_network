@@ -2,8 +2,12 @@ import './App.css';
 import SigmaNetwork from './SigmaNetwork.jsx';
 import { useState, useEffect, useRef } from 'react';
 import { asyncBufferFromUrl, parquetReadObjects } from 'hyparquet';
+import { downloadAsPNG } from '@sigma/export-image';
 
 function App() {
+  // Ref to capture Sigma instance for export
+  const sigmaRef = useRef(null);
+
   const [graphmlString, setGraphmlString] = useState('');
   const [edgeRows, setEdgeRows] = useState([]);
   const [metadataRows, setMetadataRows] = useState([]);
@@ -23,9 +27,11 @@ function App() {
   const [useEdgeList, setUseEdgeList] = useState(false); // Toggle between GraphML and edge list
   const [isProcessingGraph, setIsProcessingGraph] = useState(false);
   const [iframeSrc, setIframeSrc] = useState('');
-  const [showIframe, setShowIframe] = useState(true);
+  const [showIframe, setShowIframe] = useState(false);
   const [enableDynamicEdges, setEnableDynamicEdges] = useState(true);
   const [showLabels, setShowLabels] = useState(true);
+  // Toggle PTU cluster labels overlay
+  const [showPTUs, setShowPTUs] = useState(false);
   const debounceRef = useRef();
 
   // Parse CSV headers whenever metadataCsvString changes
@@ -153,6 +159,7 @@ function App() {
   useEffect(() => {
     if (!highlightedNode) {
       setIframeSrc('');
+      setShowIframe(false);
       return;
     }
     // Build JSON URL based on gene id
@@ -188,6 +195,7 @@ function App() {
     const blob = new Blob([htmlContent], { type: 'text/html' });
     const blobUrl = URL.createObjectURL(blob);
     setIframeSrc(blobUrl);
+    setShowIframe(true);
     return () => URL.revokeObjectURL(blobUrl);
   }, [highlightedNode]);
 
@@ -301,52 +309,61 @@ function App() {
             <button onClick={() => setShowLabels(prev => !prev)} style={{ background: 'rgba(255,255,255,0.7)', borderRadius: 4, padding: '2px 6px' }}>
               {showLabels ? 'Hide Labels' : 'Show Labels'}
             </button>
+            <button onClick={() => setShowPTUs(prev => !prev)} style={{ background: 'rgba(255,255,255,0.7)', borderRadius: 4, padding: '2px 6px' }}>
+              {showPTUs ? 'Hide PTUs' : 'Show PTUs'}
+            </button>
+            {/* Export network snapshot */}
+            <button onClick={() => {
+                if (sigmaRef.current) downloadAsPNG(sigmaRef.current, { backgroundColor: '#ffffff' });
+              }}
+              style={{ background: 'rgba(255,255,255,0.7)', borderRadius: 4, padding: '2px 6px' }}>
+              Download PNG
+            </button>
           </>
         )}
       </div>
-      
-      {/* Only render SigmaNetwork when data is loaded and not loading */}
-      {(graphmlString || edgeRows.length > 0) && !isLoading && (
+
+      {/* Render network canvas */}
+      <div style={{ width: '100vw', height: '100vh' }}>
         <SigmaNetwork
           graphmlString={graphmlString}
           edgeRows={edgeRows}
           useEdgeList={useEdgeList}
           metadataRows={metadataRows}
           colorBy={colorBy}
-          zoomToId={zoomToId}
           highlightedNode={highlightedNode}
           hoveredNode={hoveredNode}
-          setHoveredNode={setHoveredNode}
-          setHighlightedNode={setHighlightedNode}
           edgeMode={edgeMode}
           enableDynamicEdges={enableDynamicEdges}
-          showLabels={showLabels}
+          zoomToId={zoomToId}
+          setHoveredNode={setHoveredNode}
+          setHighlightedNode={setHighlightedNode}
+          onGraphProcessingStart={() => setIsProcessingGraph(true)}
           onGraphProcessingDone={handleGraphProcessingDone}
-          onGraphProcessingStart={() => {
-            setIsProcessingGraph(true);
-            setLoadingStatus('Processing graph data...');
-          }}
+          showLabels={showLabels}
+          showPTULabels={showPTUs}
+          onSigmaInit={sigma => { sigmaRef.current = sigma; }}
         />
-      )}
-      {/* Plasmid map iframe in lower-left */}
-      {iframeSrc && showIframe && (
-        <div style={{
-          position: 'absolute',
-          bottom: 10,
-          left: 10,
-          width: 349,
-          height: 349,
-          border: '2px solid #ccc',
-          zIndex: 20,
-          background: '#fff',
-          overflow: 'hidden',
-        }}>
-          <iframe
-            src={iframeSrc}
-            title="Plasmid Map Viewer"
-            scrolling="no"
-            style={{ width: '100%', height: '100%', border: 'none', fontFamily: 'Roboto, sans-serif', overflow: 'hidden' }}
-          />
+      </div>
+
+      {/* Optional genome map iframe */}
+      {showIframe && iframeSrc && (
+        <div style={{ 
+            position: 'absolute', 
+            bottom: 10, 
+            left: 10, 
+            width: 355.5, 
+            height: 355.5, 
+            zIndex: 15, 
+            backgroundColor: '#fff', 
+          borderRadius: 0,  
+            borderWidth: 0,
+            border: 'none', 
+            overflow: 'hidden',
+            boxShadow: 'none' 
+          }}>
+
+          <iframe src={iframeSrc} title="Genome Map" style={{ width: '100%', height: '100%' }} />
         </div>
       )}
     </>

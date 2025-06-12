@@ -1,13 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import Sigma from 'sigma';
 import Graph from 'graphology';
 import { parse } from 'graphology-graphml/browser';
 import { EdgeLineProgram, NodePointProgram } from 'sigma/rendering';
 import { bindWebGLLayer, createContoursProgram } from '@sigma/layer-webgl';
-
-// Color palettes
-const DEFAULT_PALETTE = ['#e74c3c','#3498db','#2ecc71','#f1c40f','#9b59b6','#1abc9c','#e67e22','#34495e','#95a5a6','#d35400'];
-const GROUP_COLORS = { admin:'#e74c3c',user:'#3498db',moderator:'#2ecc71' };
+import iwanthue from 'iwanthue';
+import { getSequentialColors, getPalettes } from 'dicopal';
 
 function SigmaNetwork({
   graphmlString,
@@ -25,15 +23,30 @@ function SigmaNetwork({
   onGraphProcessingStart,
   onGraphProcessingDone,
   showLabels,
+  onSigmaInit, // new callback prop
+  showPTULabels,
 }) {
   const containerRef = useRef(null);
   const sigmaInstance = useRef(null);
   const metadataRef = useRef(null);
   const allEdgesRef = useRef([]);
+  const ptuPaletteRef = useRef({});
   const [communities, setCommunities] = useState([]);
   const [palette, setPalette] = useState({});
   const [visibleComms, setVisibleComms] = useState(new Set());
   const [highlightedComms, setHighlightedComms] = useState(new Set());
+  const [isNumeric, setIsNumeric] = useState(false);
+  const numericPaletteRef = useRef([]);
+  const numericDomainRef = useRef([0, 0]);
+  // Sequential palette choices for numeric legend (dynamic list)
+  const paletteOptions = useMemo(
+    () => [...new Set(
+      getPalettes({ type: 'sequential' })
+        .map(p => p.name)
+    )],
+    []
+  );
+  const [sequentialPaletteName, setSequentialPaletteName] = useState('Blues');
 
   // Ref to always get latest enableDynamicEdges in callbacks
   const enableDynamicEdgesRef = useRef(enableDynamicEdges);
@@ -74,6 +87,9 @@ function SigmaNetwork({
 
       // Initial GPU-side coloring applied automatically
 
+      // Expose sigma instance to parent
+      onSigmaInit?.(sigmaInstance.current);
+
       sigmaInstance.current.on('enterNode', ({ node }) => {
         setHoveredNode?.(node);
       });
@@ -92,49 +108,61 @@ function SigmaNetwork({
       handleCommunities(graph);
 
       // --- PTU cluster labels overlay ---
-      const renderer = sigmaInstance.current;
-      // Remove existing labels layer if present
-      let labelsLayer = containerRef.current.querySelector('#ptuLabels');
-      if (labelsLayer) labelsLayer.remove();
-      labelsLayer = document.createElement('div');
-      labelsLayer.id = 'ptuLabels';
-      // Group node positions by new_PTU attribute
-      const ptuMap = {};
-      graph.forEachNode((node, attr) => {
-        const ptu = attr.new_PTU;
-        if (!ptu) return;
-        if (!ptuMap[ptu]) ptuMap[ptu] = { positions: [], color: palette[ptu] || '#000', label: ptu };
-        ptuMap[ptu].positions.push({ x: attr.x, y: attr.y });
-      });
-      let html = '';
-      Object.values(ptuMap).forEach(cluster => {
-        // compute average position
-        const avg = cluster.positions.reduce((acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }), { x: 0, y: 0 });
-        avg.x /= cluster.positions.length;
-        avg.y /= cluster.positions.length;
-        const vp = renderer.graphToViewport(avg);
-        html += `<div id="ptu-${cluster.label}" class="ptuLabel" ` +
-                `style="position:absolute;top:${vp.y}px;left:${vp.x}px;` +
-                `color:${cluster.color};font-size:12px;pointer-events:none;">` +
-                `${cluster.label}</div>`;
-      });
-      labelsLayer.innerHTML = html;
-      // Insert under hover layer
-      containerRef.current.insertBefore(labelsLayer, containerRef.current.querySelector('.sigma-hovers'));
-      // Update labels on every render
-      renderer.on('afterRender', () => {
+      if (showPTULabels) {
+        const renderer = sigmaInstance.current;
+        // Remove existing labels layer if present
+        let labelsLayer = containerRef.current.querySelector('#ptuLabels');
+        if (labelsLayer) labelsLayer.remove();
+        labelsLayer = document.createElement('div');
+        labelsLayer.id = 'ptuLabels';
+
+        // Use existing PTU palette cached by handleCommunities
+        // Create PTU labels container
+        const graph = renderer.getGraph();
+        // Use cached PTU palette
+        const ptuColorMap = ptuPaletteRef.current;
+
+        // Build ptuMap with positions and colors for overlay
+        const ptuMap = {};
+        graph.forEachNode((node, attr) => {
+          const ptu = attr.new_PTU;
+          if (!ptu) return;
+          if (!ptuMap[ptu]) ptuMap[ptu] = { positions: [], color: ptuColorMap[ptu] || '#000', label: ptu };
+          ptuMap[ptu].positions.push({ x: attr.x, y: attr.y });
+        });
+        // Build HTML for PTU labels
+        let html = '';
         Object.values(ptuMap).forEach(cluster => {
           const avg = cluster.positions.reduce((acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }), { x: 0, y: 0 });
           avg.x /= cluster.positions.length;
           avg.y /= cluster.positions.length;
           const vp = renderer.graphToViewport(avg);
-          const el = document.getElementById(`ptu-${cluster.label}`);
-          if (el) {
-            el.style.top = `${vp.y}px`;
-            el.style.left = `${vp.x}px`;
-          }
+          html += `<div id="ptu-${cluster.label}" class="ptuLabel" ` +
+                  `style="position:absolute;top:${vp.y}px;left:${vp.x}px;` +
+                  `color:${cluster.color};font-size:12px;pointer-events:none;">` +
+                  `${cluster.label}</div>`;
         });
-      });
+        labelsLayer.innerHTML = html;
+        containerRef.current.insertBefore(labelsLayer, containerRef.current.querySelector('.sigma-hovers'));
+
+        // Update positions on each render
+        renderer.on('afterRender', () => {
+          Object.values(ptuMap).forEach(cluster => {
+            const avg = cluster.positions.reduce((acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }), { x: 0, y: 0 });
+            avg.x /= cluster.positions.length; avg.y /= cluster.positions.length;
+            const vp = renderer.graphToViewport(avg);
+            const el = document.getElementById(`ptu-${cluster.label}`);
+            if (el) {
+              el.style.top = `${vp.y}px`;
+              el.style.left = `${vp.x}px`;
+            }
+          });
+        });
+      } else {
+        // remove any existing PTU overlay
+        const existing = containerRef.current.querySelector('#ptuLabels');
+        if (existing) existing.remove();
+      }
     }
   };
 
@@ -162,6 +190,11 @@ function SigmaNetwork({
   useEffect(() => {
     const inst = sigmaInstance.current;
     if (!inst) return;
+    // Skip hiding behavior when numeric coloring is active
+    if (isNumeric) {
+      inst.refresh();
+      return;
+    }
     const graph = inst.getGraph();
     graph.forEachNode((node, attrs) => {
       const v = attrs[colorBy];
@@ -170,33 +203,32 @@ function SigmaNetwork({
       graph.setNodeAttribute(node, 'hidden', hidden);
     });
     inst.refresh();
-  }, [visibleComms]);
+  }, [visibleComms, isNumeric]);
 
   // Apply dynamic coloring and use built-in highlighted flag for selected and community highlights
   useEffect(() => {
     const s = sigmaInstance.current;
     if (!s) return;
     s.setSetting('nodeReducer', (node, data) => {
-      const v = data[colorBy];
-      // Always apply palette color for any defined key (including empty string), fallback to data.color
-      const color = v != null
-        ? (palette[v] || '#888')
-        : data.color;
-      const highlighted = node === highlightedNode || highlightedComms.has(v);
-      const hovered = node === hoveredNode;
-      const nodeLabel = data.label;
-      const newData = { ...data, color, highlighted };
-      if (!showLabels) {
-        newData.label = undefined;
-      } else if (!(highlighted || hovered)) {
-        newData.label = undefined;
-      } else {
-        newData.label = nodeLabel;
-      }
-      return newData;
-    });
-    s.refresh({ skipIndexation: true });
-  }, [palette, colorBy, highlightedComms, highlightedNode, hoveredNode, showLabels, edgeMode]);
+      // Choose color from numeric palette (node-keyed) or categorical (value-keyed)
+      const color = isNumeric
+        ? palette[node] || data.color
+        : (data[colorBy] != null ? palette[data[colorBy]] : data.color);
+     const highlighted = node === highlightedNode || highlightedComms.has(data[colorBy]);
+     const hovered = node === hoveredNode;
+     const nodeLabel = data.label;
+     const newData = { ...data, color, highlighted };
+     if (!showLabels) {
+       newData.label = undefined;
+     } else if (!(highlighted || hovered)) {
+       newData.label = undefined;
+     } else {
+       newData.label = nodeLabel;
+     }
+     return newData;
+   });
+   s.refresh({ skipIndexation: true });
+ }, [palette, colorBy, highlightedComms, highlightedNode, hoveredNode, showLabels, edgeMode, isNumeric]);
 
   // Build graph directly from Parquet rows
   const loadFromEdgeList = async () => {
@@ -325,7 +357,7 @@ function SigmaNetwork({
     if (!inst) return;
     const graph = inst.getGraph();
     handleCommunities(graph);
-  }, [colorBy]);
+  }, [colorBy, sequentialPaletteName]);
 
   useEffect(() => {
     const resize = () => sigmaInstance.current?.refresh(
@@ -349,50 +381,184 @@ function SigmaNetwork({
     setHighlightedNode?.(zoomToId);
   }, [zoomToId]);
 
+  // Effect: show/hide PTU cluster labels overlay on prop change
+  useEffect(() => {
+    const renderer = sigmaInstance.current;
+    const container = containerRef.current;
+    if (!renderer || !container) return;
+
+    // Remove any existing PTU overlay
+    const existing = container.querySelector('#ptuLabels');
+    if (existing) existing.remove();
+
+    if (showPTULabels) {
+      // Use existing PTU palette cached by handleCommunities
+       // Create PTU labels container
+       const labelsLayer = document.createElement('div');
+       labelsLayer.id = 'ptuLabels';
+
+       // Build PTU label clusters and html
+       const graph = renderer.getGraph();
+       // Use cached PTU palette
+       const ptuColorMap = ptuPaletteRef.current;
+       // Build ptuMap with positions and colors for overlay
+       const ptuMap = {};
+       graph.forEachNode((node, attr) => {
+         const ptu = attr.new_PTU;
+         if (!ptu) return;
+         if (!ptuMap[ptu]) ptuMap[ptu] = { positions: [], color: ptuColorMap[ptu] || '#000', label: ptu };
+         ptuMap[ptu].positions.push({ x: attr.x, y: attr.y });
+       });
+       // Build HTML for PTU labels
+       let html = '';
+       Object.values(ptuMap).forEach(cluster => {
+         const avg = cluster.positions.reduce((acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }), { x: 0, y: 0 });
+         avg.x /= cluster.positions.length;
+         avg.y /= cluster.positions.length;
+         const vp = renderer.graphToViewport(avg);
+         html += `<div id="ptu-${cluster.label}" class="ptuLabel" ` +
+                 `style="position:absolute;top:${vp.y}px;left:${vp.x}px;` +
+                 `color:${cluster.color};font-size:12px;pointer-events:none;">` +
+                 `${cluster.label}</div>`;
+       });
+       labelsLayer.innerHTML = html;
+       container.insertBefore(labelsLayer, container.querySelector('.sigma-hovers'));
+
+       // Update label positions on each render
+       renderer.on('afterRender', () => {
+         Object.values(ptuMap).forEach(cluster => {
+           const avg = cluster.positions.reduce((acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }), { x: 0, y: 0 });
+           avg.x /= cluster.positions.length; avg.y /= cluster.positions.length;
+           const vp = renderer.graphToViewport(avg);
+           const el = document.getElementById(`ptu-${cluster.label}`);
+           if (el) {
+             el.style.top = `${vp.y}px`;
+             el.style.left = `${vp.x}px`;
+           }
+         });
+       });
+    }
+  }, [showPTULabels, palette]);
+
   // Compute community list & palette when graph is rendered
   const handleCommunities = graph => {
-    // Gather unique values for current colorBy
+     // Precompute PTU palette including missing values (empty) in light gray
+     const ptuSet = new Set();
+     graph.forEachNode((n, attrs) => {
+       const v = attrs.new_PTU;
+       ptuSet.add(v != null && v !== '' ? v : '');
+     });
+     const ptuList = Array.from(ptuSet);
+     const ptuColors = iwanthue(ptuList.length) || [];
+     const ptuPal = {};
+     ptuList.forEach((ptu, i) => {
+       ptuPal[ptu] = ptu === '' ? '#d3d3d3' : (ptuColors[i] || '#888');
+     });
+     ptuPaletteRef.current = ptuPal;
+
+    // Determine nodes and values for colorBy
+    const nodes = [];
+    graph.forEachNode(node => nodes.push(node));
+    const numericData = nodes.map(node => ({ node, v: Number(graph.getNodeAttribute(node, colorBy)) }))
+      .filter(d => !isNaN(d.v));
+    // Numeric if all nodes have a valid number
+    const numeric = numericData.length === nodes.length;
+    setIsNumeric(numeric);
+    if (colorBy === 'new_PTU') {
+      const pal = ptuPaletteRef.current;
+      setPalette(pal);
+      const commList = Object.keys(pal);
+      setCommunities(commList);
+      setVisibleComms(new Set(commList));
+      setIsNumeric(false);
+      return;
+    }
+    if (numeric) {
+      // Sort nodes by value
+      numericData.sort((a, b) => a.v - b.v);
+      // Store numeric domain and palette for legend
+      const values = numericData.map(d => d.v);
+      numericDomainRef.current = [values[0], values[values.length - 1]];
+      // Generate numeric palette via dicopal
+      const palColors = getSequentialColors(sequentialPaletteName, numericData.length);
+      numericPaletteRef.current = palColors;
+      const palMap = {};
+      numericData.forEach((d, i) => { palMap[d.node] = palColors[i] ?? '#888'; });
+      setPalette(palMap);
+      setCommunities([]);
+      setVisibleComms(new Set());
+      return;
+    }
+    // Categorical branch
     const commSet = new Set();
     graph.forEachNode((node, attrs) => {
       const v = attrs[colorBy];
       if (v != null) commSet.add(v);
     });
-    const commList = Array.from(commSet);
-    // Build consistent palette: groupColors for 'group', else DEFAULT_PALETTE
+    const allComms = Array.from(commSet);
+    // Generate categorical palette via iwanthue
+    let colors = iwanthue(allComms.length) || [];
+    // Randomize order
+    for (let i = colors.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [colors[i], colors[j]] = [colors[j], colors[i]];
+    }
+    const nonMissing = allComms.filter(c => c !== '').sort((a, b) => a.localeCompare(b));
+    const missing = allComms.includes('') ? [''] : [];
+    const commList = [...nonMissing, ...missing];
     const pal = {};
     commList.forEach((comm, i) => {
-      if (colorBy === 'group' && GROUP_COLORS[comm]) pal[comm] = GROUP_COLORS[comm];
-      else pal[comm] = DEFAULT_PALETTE[i % DEFAULT_PALETTE.length];
+      pal[comm] = comm === '' ? '#d3d3d3' : (colors[i] ?? '#888');
     });
     setCommunities(commList);
     setVisibleComms(new Set(commList));
     setPalette(pal);
-
-    // Apply nodeReducer immediately to update colors
-    const s = sigmaInstance.current;
-    if (s) {
-      s.setSetting('nodeReducer', (node, data) => {
-        const v = data[colorBy];
-        return { ...data, color: pal[v] || '#888' };
-      });
-      s.refresh();
-    }
-  };
+ };
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <details style={{ position: 'absolute', top: 10, right: 10, zIndex: 20, background: 'rgba(255,255,255,0.9)', padding: 4, borderRadius: 4, fontSize: 12 }}>
         <summary style={{ cursor: 'pointer', padding: '4px' }}>Legend</summary>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '4px', maxHeight: '50vh', overflowY: 'auto' }}>
-          <button onClick={toggleAll} style={{ fontSize: 12, padding: '2px 4px', marginBottom: 4, background: '#fff', color: '#000', border: '1px solid #ccc' }}>
-            {visibleComms.size < communities.length ? 'Show All' : 'Hide All'}
-          </button>
-          {communities.map(comm => (
-            <label key={comm} style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', opacity: visibleComms.has(comm) ? 1 : 0.3 }}>
-              <span onClick={() => toggleComm(comm)} style={{ width: 12, height: 12, background: palette[comm], display: 'inline-block', borderRadius: 2, cursor: 'pointer' }} />
-              <span onClick={() => toggleHighlight(comm)} style={{ fontSize: 12, cursor: 'pointer', fontWeight: highlightedComms.has(comm) ? 'bold' : 'normal' }}>{comm}</span>
-            </label>
-          ))}
+          {isNumeric ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: 6, flexDirection: 'column' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%' }}>
+                <span style={{ fontSize: 13, whiteSpace: 'nowrap' }}>{numericDomainRef.current[0].toLocaleString()}</span>
+                <div
+                  style={{
+                    flex: 1,
+                    height: 20,
+                    background: `linear-gradient(to right, ${numericPaletteRef.current[0]}, ${numericPaletteRef.current[numericPaletteRef.current.length - 1]})`,
+                    border: '1px solid #ccc',
+                    borderRadius: 4,
+                  }}
+                />
+                <span style={{ fontSize: 13, whiteSpace: 'nowrap' }}>{numericDomainRef.current[1].toLocaleString()}</span>
+              </div>
+              <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 4, width: '100%' }}>
+                <label style={{ fontSize: 13 }}>Palette:</label>
+                {/* Dropdown to select sequential palette dynamically */}
+                <select
+                  value={sequentialPaletteName}
+                  onChange={e => setSequentialPaletteName(e.target.value)}
+                  style={{ flex: 1, padding: '2px 4px', fontSize: 13 }}
+                >
+                  {paletteOptions.map(opt => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          ) : (
+            communities.map(comm => (
+              <label key={comm} style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', opacity: visibleComms.has(comm) ? 1 : 0.3 }}>
+                <span onClick={() => toggleComm(comm)} style={{ width: 12, height: 12, background: palette[comm], display: 'inline-block', borderRadius: 2, cursor: 'pointer' }} />
+                <span onClick={() => toggleHighlight(comm)} style={{ fontSize: 12, cursor: 'pointer', fontWeight: highlightedComms.has(comm) ? 'bold' : 'normal' }}>
+                  {comm === '' ? 'Missing' : comm}
+                </span>
+              </label>
+            ))
+          )}
         </div>
       </details>
       <div ref={containerRef} style={{ width: '100%', height: '100%' }} />

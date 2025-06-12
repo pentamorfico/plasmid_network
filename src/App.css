@@ -14,3 +14,15 @@ html, body, #root {
   padding: 0;
   text-align: initial;
 }
+
+.clusterLabel {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-weight: bold;
+  font-size: 14px;
+  pointer-events: none;
+  white-space: nowrap;
+  text-shadow: none; /* Disable glow */
+  filter: none;       /* Disable blur or effects */
+  opacity: 0.9;
+}
