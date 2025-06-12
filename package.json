@@ -17,6 +17,7 @@
     "graphology": "^0.26.0",
     "graphology-communities-louvain": "^2.0.2",
     "graphology-graphml": "^0.5.2",
+    "hyparquet": "^1.16.0",
     "iwanthue": "^2.0.0",
     "papaparse": "^5.5.3",
     "react": "^19.1.0",

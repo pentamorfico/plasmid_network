@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import Sigma from 'sigma';
 import Graph from 'graphology';
 import { parse } from 'graphology-graphml/browser';
-import Papa from 'papaparse';
 import { EdgeLineProgram, NodePointProgram } from 'sigma/rendering';
 import { bindWebGLLayer, createContoursProgram } from '@sigma/layer-webgl';
 
@@ -12,9 +11,9 @@ const GROUP_COLORS = { admin:'#e74c3c',user:'#3498db',moderator:'#2ecc71' };
 
 function SigmaNetwork({
   graphmlString,
-  edgeListString,
+  edgeRows = [],
   useEdgeList = false,
-  metadataCsvString,
+  metadataRows = [],
   colorBy = 'group',
   highlightedNode,
   hoveredNode,
@@ -40,21 +39,13 @@ function SigmaNetwork({
   const enableDynamicEdgesRef = useRef(enableDynamicEdges);
   useEffect(() => { enableDynamicEdgesRef.current = enableDynamicEdges; }, [enableDynamicEdges]);
 
+  // Build metadata map directly
   useEffect(() => {
-    if (metadataCsvString) {
-      const isTsv = metadataCsvString.includes('\t');
-      const parsed = Papa.parse(metadataCsvString, {
-        header: true,
-        skipEmptyLines: true,
-        delimiter: isTsv ? '\t' : ',',
-      });
-      const map = {};
-      parsed.data.forEach((row) => {
-        if (row.id) map[row.id] = row;
-      });
-      metadataRef.current = map;
-    }
-  }, [metadataCsvString]);
+    if (!metadataRows.length) return;
+    const map = {};
+    metadataRows.forEach(r => { if (r.id) map[r.id] = r; });
+    metadataRef.current = map;
+  }, [metadataRows]);
 
   const renderGraph = (graph) => {
     if (sigmaInstance.current) sigmaInstance.current.kill();
@@ -129,8 +120,8 @@ function SigmaNetwork({
     const graph = inst.getGraph();
     graph.forEachNode((node, attrs) => {
       const v = attrs[colorBy];
-      // Only hide if there's a category and it's not in the visible set
-      const hidden = v != null && v !== '' && !visibleComms.has(v);
+      // Hide any category (including empty string) if it's not in the visible set
+      const hidden = v != null && !visibleComms.has(v);
       graph.setNodeAttribute(node, 'hidden', hidden);
     });
     inst.refresh();
@@ -142,7 +133,8 @@ function SigmaNetwork({
     if (!s) return;
     s.setSetting('nodeReducer', (node, data) => {
       const v = data[colorBy];
-      const color = v != null && v !== ''
+      // Always apply palette color for any defined key (including empty string), fallback to data.color
+      const color = v != null
         ? (palette[v] || '#888')
         : data.color;
       const highlighted = node === highlightedNode || highlightedComms.has(v);
@@ -161,45 +153,30 @@ function SigmaNetwork({
     s.refresh({ skipIndexation: true });
   }, [palette, colorBy, highlightedComms, highlightedNode, hoveredNode, showLabels, edgeMode]);
 
-  const loadFromEdgeList = async (tsv) => {
-    if (onGraphProcessingStart) onGraphProcessingStart();
-    await new Promise((r) => setTimeout(r, 0));
+  // Build graph directly from Parquet rows
+  const loadFromEdgeList = async () => {
+    onGraphProcessingStart?.();
+    // build graph and edge list
     const graph = new Graph();
-    const lines = tsv.trim().split('\n');
-    const hasHeader = /source|target/i.test(lines[0]);
-    const start = hasHeader ? 1 : 0;
-    const nodeSet = new Set();
-    const edges = [];
-
-    // Always parse edges into ref
-    for (let i = start; i < lines.length; i++) {
-      const [source, target, weight] = lines[i].split('\t');
-      if (!source || !target) continue;
-      nodeSet.add(source);
-      nodeSet.add(target);
-      edges.push({ source, target, attributes: { weight: parseFloat(weight) || 1, color: 'rgb(227, 227, 227)', size: 1 } });
-    }
+    const edges = edgeRows.map(r => ({
+      source: r.source,
+      target: r.target,
+      attributes: { weight: r.weight || 1, color: 'rgb(227,227,227)', size: 1 }
+    }));
     allEdgesRef.current = edges;
-
-    // Add nodes
-    for (const id of nodeSet) {
+    const nodeSet = new Set(edges.flatMap(e => [e.source, e.target]));
+    // add nodes from metadata
+    nodeSet.forEach(id => {
       const attrs = metadataRef.current?.[id] ?? {};
-      let x = parseFloat(attrs.x);
-      let y = parseFloat(attrs.y);
+      let x = parseFloat(attrs.x), y = parseFloat(attrs.y);
       if (isNaN(x)) x = Math.random() * 10;
       if (isNaN(y)) y = Math.random() * 10;
       graph.addNode(id, { ...attrs, x, y, size: 0.7, label: id });
-    }
-
-    // Conditionally add edges: all edges only if edgeMode is 'all'
-    if (edgeMode === 'all') {
-      edges.forEach(({ source, target, attributes }) => {
-        try { graph.addEdge(source, target, attributes); } catch {}
-      });
-    }
-
+    });
+    // add edges if mode=all
+    if (edgeMode === 'all') edges.forEach(e => { try { graph.addEdge(e.source, e.target, e.attributes); } catch {} });
     renderGraph(graph);
-    if (onGraphProcessingDone) onGraphProcessingDone();
+    onGraphProcessingDone?.();
   };
 
   const loadFromGraphML = (graphmlText) => {
@@ -293,12 +270,9 @@ function SigmaNetwork({
   }, [enableDynamicEdges, edgeMode]);
 
   useEffect(() => {
-    if (useEdgeList && edgeListString) {
-      loadFromEdgeList(edgeListString);
-    } else if (graphmlString) {
-      loadFromGraphML(graphmlString);
-    }
-  }, [graphmlString, edgeListString, useEdgeList, metadataCsvString, edgeMode]); // removed colorBy
+    if (useEdgeList && edgeRows.length) loadFromEdgeList();
+    else if (graphmlString) loadFromGraphML(graphmlString);
+  }, [graphmlString, edgeRows, useEdgeList, metadataRows, edgeMode]);
 
   // Recompute legend/palette and visible set when colorBy changes
   useEffect(() => {
