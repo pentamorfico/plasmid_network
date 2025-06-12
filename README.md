@@ -1,5 +1,7 @@
 # Plasmid Defense Network Viewer
 
+![Network Diagram](docs/screenshot.png)
+
 This [live application](https://pentamorfico.github.io/plasmid_network/) visualizes biological plasmid networks using Graphology and Sigma.js. It automatically loads metadata and edge data from Parquet files, builds an interactive graph, and allows real-time exploration of network structure and individual plasmid maps.
 
 ## Features
