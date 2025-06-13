@@ -1,12 +1,11 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import { viteSingleFile } from 'vite-plugin-singlefile'
 
 // https://vite.dev/config/
 export default defineConfig({
   base: '/plasmid_network/',
-  plugins: [react(), viteSingleFile()],
+  plugins: [react()],
   build: {
-    assetsInlineLimit: 1000000000, // 1GB, to force inline assets
+    assetsInlineLimit: 0, // disable inlining to copy .parquet files as real assets
   },
 })
