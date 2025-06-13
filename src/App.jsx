@@ -118,26 +118,26 @@ function App() {
 
   // --- Add this useEffect for automatic loading on mount ---
   useEffect(() => {
-    // Only auto-load if no data is present
     if (hasDefaultData && !metadataRows.length && !edgeRows.length && !graphmlString) {
       (async () => {
         setIsLoading(true);
         setLoadingProgress(0);
         setLoadingStatus('Initializing Parquet metadata load...');
+  
         try {
-          // 1. Load metadata from Parquet via hyparquet
           const url = import.meta.env.BASE_URL + 'data/scatter_small.parquet';
-          const file = await asyncBufferFromUrl({ url });
-          const rows = await parquetReadObjects({ file });
+          const response = await fetch(url);
+          const buffer = await response.arrayBuffer();
+          const rows = await parquetReadObjects({ file: buffer });
           setMetadataRows(rows);
           setHasDefaultData(false);
           setLoadingStatus(`Parquet metadata loaded: ${rows.length} rows`);
           setLoadingProgress(0);
-           
-          // 2. Load network edge list from Parquet
+  
           const edgeUrl = import.meta.env.BASE_URL + 'data/mock_edges.parquet';
-          const edgeFile = await asyncBufferFromUrl({ url: edgeUrl });
-          const edgeRowsArr = await parquetReadObjects({ file: edgeFile });
+          const edgeResp = await fetch(edgeUrl);
+          const edgeBuf = await edgeResp.arrayBuffer();
+          const edgeRowsArr = await parquetReadObjects({ file: edgeBuf });
           setEdgeRows(edgeRowsArr);
           setUseEdgeList(true);
           setGraphmlString('');
@@ -153,7 +153,8 @@ function App() {
         }
       })();
     }
-  }, [hasDefaultData, /* clear CSV/string deps */ graphmlString]);
+  }, [hasDefaultData, graphmlString]);
+  
 
   // Effect: generate plasmid map viewer HTML when a gene node is selected
   useEffect(() => {
