@@ -47,6 +47,10 @@ function SigmaNetwork({
     []
   );
   const [sequentialPaletteName, setSequentialPaletteName] = useState('Blues');
+  // Toggle to reverse numeric palette order
+  const [isReversed, setIsReversed] = useState(false);
+  // Array state for legend gradient stops
+  const [numericPaletteState, setNumericPaletteState] = useState([]);
 
   // Ref to always get latest enableDynamicEdges in callbacks
   const enableDynamicEdgesRef = useRef(enableDynamicEdges);
@@ -357,7 +361,7 @@ function SigmaNetwork({
     if (!inst) return;
     const graph = inst.getGraph();
     handleCommunities(graph);
-  }, [colorBy, sequentialPaletteName]);
+  }, [colorBy, sequentialPaletteName, isReversed]);
 
   useEffect(() => {
     const resize = () => sigmaInstance.current?.refresh(
@@ -479,9 +483,12 @@ function SigmaNetwork({
       // Store numeric domain and palette for legend
       const values = numericData.map(d => d.v);
       numericDomainRef.current = [values[0], values[values.length - 1]];
-      // Generate numeric palette via dicopal
-      const palColors = getSequentialColors(sequentialPaletteName, numericData.length);
+      // Generate numeric palette via dicopal, reverse if toggled
+      let palColors = getSequentialColors(sequentialPaletteName, numericData.length);
+      if (isReversed) palColors = [...palColors].reverse();
       numericPaletteRef.current = palColors;
+      // Store palette for nodes and legend
+      setNumericPaletteState(palColors);
       const palMap = {};
       numericData.forEach((d, i) => { palMap[d.node] = palColors[i] ?? '#888'; });
       setPalette(palMap);
@@ -524,18 +531,30 @@ function SigmaNetwork({
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: 6, flexDirection: 'column' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%' }}>
                 <span style={{ fontSize: 13, whiteSpace: 'nowrap' }}>{numericDomainRef.current[0].toLocaleString()}</span>
+                {/* Gradient with full palette stops and reversal toggle */}
                 <div
                   style={{
                     flex: 1,
                     height: 20,
-                    background: `linear-gradient(to right, ${numericPaletteRef.current[0]}, ${numericPaletteRef.current[numericPaletteRef.current.length - 1]})`,
+                    background: `linear-gradient(to right, ${numericPaletteState
+                        .map((c, i, arr) => `${c} ${(i / (arr.length - 1)) * 100}%`)
+                        .join(', ')} )`,
                     border: '1px solid #ccc',
                     borderRadius: 4,
                   }}
                 />
                 <span style={{ fontSize: 13, whiteSpace: 'nowrap' }}>{numericDomainRef.current[1].toLocaleString()}</span>
               </div>
-              <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 4, width: '100%' }}>
+              <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
+                <label style={{ display: 'flex', alignItems: 'center', fontSize: 13 }}>
+                  <input
+                    type="checkbox"
+                    checked={isReversed}
+                    onChange={e => setIsReversed(e.target.checked)}
+                    style={{ marginRight: 4 }}
+                  />
+                  Reverse
+                </label>
                 <label style={{ fontSize: 13 }}>Palette:</label>
                 {/* Dropdown to select sequential palette dynamically */}
                 <select

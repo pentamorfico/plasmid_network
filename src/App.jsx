@@ -257,6 +257,8 @@ function App() {
         {/* Only show controls if data is loaded */}
         {(graphmlString || edgeRows.length > 0) && (
           <>
+            {/* Color by selector label */}
+            <span style={{ fontSize: 13, marginRight: 6, whiteSpace: 'nowrap' }}>Color by:</span>
             <select value={String(colorBy)} onChange={e => setColorBy(String(e.target.value))} style={{ background: 'rgba(255,255,255,0.7)', borderRadius: 4 }}>
               {csvColumns.map(col => (
                 <option key={col} value={col}>{col}</option>
@@ -314,7 +316,7 @@ function App() {
             </button>
             {/* Export network snapshot */}
             <button onClick={() => {
-                if (sigmaRef.current) downloadAsPNG(sigmaRef.current, { backgroundColor: '#ffffff' });
+                if (sigmaRef.current) downloadAsPNG(sigmaRef.current, { height: 800, width: 800 });
               }}
               style={{ background: 'rgba(255,255,255,0.7)', borderRadius: 4, padding: '2px 6px' }}>
               Download PNG
