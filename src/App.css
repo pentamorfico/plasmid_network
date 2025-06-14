@@ -26,3 +26,320 @@ html, body, #root {
   filter: none;       /* Disable blur or effects */
   opacity: 0.9;
 }
+
+.loading-container {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: white;
+  overflow: hidden;
+  color: #3f3f3f;
+  font-family: 'Arial', sans-serif;
+}
+
+.plasmid-container {
+  position: relative;
+  width: 300px;
+  height: 300px;
+  margin: 0 auto 20px;
+}
+
+.plasmid-circle {
+  position: absolute;
+  top: 50px;
+  left: 50px;
+  width: 200px;
+  height: 200px;
+  border: 3px solid rgba(224, 224, 224, 0.4);
+  border-radius: 80%;
+  box-shadow: 0 0 10px rgba(100, 100, 100, 0.1);
+}
+
+.gene-track {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 200px;
+  height: 200px;
+  transform: translate(-50%, -50%);
+  animation: spin-and-pulse 6s linear infinite;
+}
+
+.gene {
+  position: absolute;
+  width: 30px;
+  height: 12px;
+  background: linear-gradient(90deg, #4facfe, #00f2fe);
+  border-radius: 2px;
+  box-shadow: 0 0 0px rgba(79, 172, 254, 0.6);
+  transform-origin: center;
+}
+
+.gene.short {
+  width: 28px;
+}
+
+.gene.short::after {
+  right: -6px;
+  border-left: 6px solid #00f2fe;
+  border-top: 5px solid transparent;
+  border-bottom: 5px solid transparent;
+}
+
+.gene.medium {
+  width: 30px;
+}
+
+.gene.long {
+  width: 45px;
+}
+
+.gene.long::after {
+  right: -10px;
+  border-left: 10px solid #00f2fe;
+  border-top: 7px solid transparent;
+  border-bottom: 7px solid transparent;
+}
+
+.gene::after {
+  content: '';
+  position: absolute;
+  right: -8px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  border-left: 8px solid #00f2fe;
+  border-top: 6px solid transparent;
+  border-bottom: 6px solid transparent;
+  filter: drop-shadow(0 0 5px rgba(0, 242, 254, 0.6));
+}
+
+.gene.type-2 {
+  background: linear-gradient(90deg, #fa709a, #fee140);
+  box-shadow: 0 0 10px rgba(250, 112, 154, 0.6);
+}
+
+.gene.type-2::after {
+  border-left-color: #fee140;
+  filter: drop-shadow(0 0 5px rgba(254, 225, 64, 0.6));
+}
+
+.gene.type-2.short::after {
+  border-left-color: #fee140;
+}
+
+.gene.type-2.long::after {
+  border-left-color: #fee140;
+}
+
+.gene.type-3 {
+  background: linear-gradient(90deg, #a8edea, #fed6e3);
+  box-shadow: 0 0 10px rgba(168, 237, 234, 0.6);
+}
+
+.gene.type-3::after {
+  border-left-color: #fed6e3;
+  filter: drop-shadow(0 0 5px rgba(254, 214, 227, 0.6));
+}
+
+.gene.type-3.short::after {
+  border-left-color: #fed6e3;
+}
+
+.gene.type-3.long::after {
+  border-left-color: #fed6e3;
+}
+
+.gene.type-4 {
+  background: linear-gradient(90deg, #ffecd2, #fcb69f);
+  box-shadow: 0 0 10px rgba(252, 182, 159, 0.6);
+}
+
+.gene.type-4::after {
+  border-left-color: #fcb69f;
+  filter: drop-shadow(0 0 5px rgba(252, 182, 159, 0.6));
+}
+
+.gene.type-4.short::after {
+  border-left-color: #fcb69f;
+}
+
+.gene.type-4.long::after {
+  border-left-color: #fcb69f;
+}
+
+/* Position genes on the circle circumference */
+.gene-1 {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(0deg) translateX(100px) rotate(90deg);
+}
+
+.gene-2 {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(45deg) translateX(100px) rotate(90deg);
+}
+
+.gene-3 {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(90deg) translateX(100px) rotate(90deg);
+}
+
+.gene-4 {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(135deg) translateX(100px) rotate(90deg);
+}
+
+.gene-5 {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(180deg) translateX(100px) rotate(90deg);
+}
+
+.gene-6 {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(225deg) translateX(100px) rotate(90deg);
+}
+
+.gene-7 {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(270deg) translateX(100px) rotate(90deg);
+}
+
+.gene-8 {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(315deg) translateX(100px) rotate(90deg);
+}
+
+.center-dot {
+  position: absolute;
+  top: 146px;
+  left: 146px;
+  width: 0px;
+  height: 0px;
+  background: rgba(100, 100, 100, 0.8);
+  border-radius: 50%;
+  box-shadow: 0 0 15px rgba(100, 100, 100, 0.6);
+  z-index: 10;
+}
+
+.loading-text {
+  font-size: 24px;
+  font-weight: bold;
+  margin-bottom: 10px;
+  text-shadow: 0 0 10px rgba(100, 100, 100, 0.3);
+  color: #3f3f3f;
+}
+
+.loading-subtitle {
+  font-size: 14px;
+  opacity: 0.8;
+  letter-spacing: 1px;
+  color: #3f3f3f;
+}
+
+.pulse {
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.pulse-spin {
+  animation: pulse-spin 2s ease-in-out infinite;
+}
+
+.progress-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.progress-bar {
+  width: 200px;
+  height: 4px;
+  background: rgba(148, 163, 184, 0.2);
+  border-radius: 2px;
+  overflow: hidden;
+  position: relative;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #4facfe, #00f2fe, #fa709a, #fee140);
+  background-size: 200% 100%;
+  border-radius: 2px;
+  animation: progressShine 2s ease-in-out infinite;
+  transition: width 0.5s ease-out;
+}
+
+
+@keyframes spin-and-pulse {
+  0% {
+    transform: translate(-50%, -50%) rotate(0deg) scale(1);
+    opacity: 0.6;
+  }
+  16.67% {
+    transform: translate(-50%, -50%) rotate(60deg) scale(1.1);
+    opacity: 1;
+  }
+  33.33% {
+    transform: translate(-50%, -50%) rotate(120deg) scale(1);
+    opacity: 0.6;
+  }
+  50% {
+    transform: translate(-50%, -50%) rotate(180deg) scale(1.1);
+    opacity: 1;
+  }
+  66.67% {
+    transform: translate(-50%, -50%) rotate(240deg) scale(1);
+    opacity: 0.6;
+  }
+  83.33% {
+    transform: translate(-50%, -50%) rotate(300deg) scale(1.1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(-50%, -50%) rotate(360deg) scale(1);
+    opacity: 0.6;
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 0.6;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+}
+
+@keyframes pulse-spin {
+  0%, 100% {
+    opacity: 0.6;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.1);
+  }
+}
+
+@keyframes progressShine {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}

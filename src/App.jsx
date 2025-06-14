@@ -1,14 +1,19 @@
 import './App.css';
 import SigmaNetwork from './SigmaNetwork.jsx';
 import { useState, useEffect, useRef } from 'react';
-import { asyncBufferFromUrl, parquetReadObjects } from 'hyparquet';
 import { downloadAsPNG } from '@sigma/export-image';
+
+const LOADING_STATES = [
+  'Loading node data...',
+  'Loading edge data...',
+  'Creating network...',
+  'Coloring network...'
+];
 
 function App() {
   // Ref to capture Sigma instance for export
   const sigmaRef = useRef(null);
 
-  const [graphmlString, setGraphmlString] = useState('');
   const [edgeRows, setEdgeRows] = useState([]);
   const [metadataRows, setMetadataRows] = useState([]);
   const [colorBy, setColorBy] = useState(''); // Start empty, auto-detect from CSV
@@ -20,19 +25,31 @@ function App() {
   const [highlightedNode, setHighlightedNode] = useState();
   const [hoveredNode, setHoveredNode] = useState();
   const [edgeMode, setEdgeMode] = useState('none'); // 'none', 'all', 'hovered'
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true); // Start with loading true
   const [loadingProgress, setLoadingProgress] = useState(0);
-  const [loadingStatus, setLoadingStatus] = useState('');
-  const [hasDefaultData, setHasDefaultData] = useState(true);
-  const [useEdgeList, setUseEdgeList] = useState(false); // Toggle between GraphML and edge list
-  const [isProcessingGraph, setIsProcessingGraph] = useState(false);
+  const [loadingStatus, setLoadingStatus] = useState('Initializing...');
   const [iframeSrc, setIframeSrc] = useState('');
   const [showIframe, setShowIframe] = useState(false);
   const [enableDynamicEdges, setEnableDynamicEdges] = useState(true);
   const [showLabels, setShowLabels] = useState(true);
   // Toggle PTU cluster labels overlay
   const [showPTUs, setShowPTUs] = useState(false);
+  // Shared button style (match SigmaNetwork buttons)
+  const buttonStyle = {
+    padding: '3px 12px',
+    background: '#fff',
+    color: '#000',
+    border: '1px solid #ccc',
+    borderRadius: 14,
+    cursor: 'pointer',
+    fontSize: '11px'
+  };
+  const [loadingStage, setLoadingStage] = useState(0); // 0: node, 1: edge, 2: create, 3: color
+  const [isReady, setIsReady] = useState(false);
+  const [isNetworkReady, setIsNetworkReady] = useState(false); // New state for when network is fully colored
   const debounceRef = useRef();
+
+  console.log('[App] Render - isLoading:', isLoading, 'isReady:', isReady, 'isNetworkReady:', isNetworkReady, 'loadingStatus:', loadingStatus);
 
   // Parse CSV headers whenever metadataCsvString changes
   useEffect(() => {
@@ -55,26 +72,13 @@ function App() {
 
   // Extract node ids from the current data (GraphML or TSV edge list)
   useEffect(() => {
-    let ids = [];
-    
-    if (useEdgeList && edgeRows.length > 0) {
-      // Parse node ids from edge list
-      const nodeSet = new Set();
-      
-      for (const row of edgeRows) {
-        if (row.source) nodeSet.add(row.source);
-        if (row.target) nodeSet.add(row.target);
-      }
-      
-      ids = Array.from(nodeSet);
-    } else if (graphmlString) {
-      // Parse node ids from GraphML string
-      const matches = Array.from(graphmlString.matchAll(/<node id="([^"]+)"/g));
-      ids = matches.map(m => m[1]);
+    const nodeSet = new Set();
+    for (const row of edgeRows) {
+      if (row.source) nodeSet.add(row.source);
+      if (row.target) nodeSet.add(row.target);
     }
-    
-    setNodeIdOptions(ids);
-  }, [graphmlString, edgeRows, useEdgeList]);
+    setNodeIdOptions(Array.from(nodeSet));
+  }, [edgeRows]);
 
   // Debounced filter for autocomplete
   useEffect(() => {
@@ -89,13 +93,7 @@ function App() {
     return () => clearTimeout(debounceRef.current);
   }, [searchId, nodeIdOptions]);
   
-  // Callback for SigmaNetwork to signal when graph processing is done
-  const handleGraphProcessingDone = () => {
-    setIsProcessingGraph(false);
-    setLoadingStatus('');
-  };
-
-  // Add effect to log loading state changes
+  // Effect to log loading state changes
   useEffect(() => {
     if (isLoading) {
       console.log('[App] Data loading started:', loadingStatus);
@@ -109,52 +107,188 @@ function App() {
     }
   }, [loadingStatus]);
   useEffect(() => {
-    if (isProcessingGraph) {
-      console.log('[App] Graph processing started.');
-    } else {
-      console.log('[App] Graph processing stopped.');
-    }
-  }, [isProcessingGraph]);
+    let mounted = true;
+    let worker = null;
 
-  // --- Add this useEffect for automatic loading on mount ---
-  useEffect(() => {
-    if (hasDefaultData && !metadataRows.length && !edgeRows.length && !graphmlString) {
-      (async () => {
+    // Fallback for main thread loading - more reliable
+    const loadDataMainThread = async () => {
+      console.log('[App] Starting main thread data loading...');
+      
+      try {
+        const { parquetReadObjects } = await import('hyparquet');
+        
         setIsLoading(true);
+        setIsReady(false);
+        setLoadingStage(0);
         setLoadingProgress(0);
-        setLoadingStatus('Initializing Parquet metadata load...');
-  
-        try {
-          const url = import.meta.env.BASE_URL + 'data/scatter_small.parquet';
-          const response = await fetch(url);
-          const buffer = await response.arrayBuffer();
-          const rows = await parquetReadObjects({ file: buffer });
-          setMetadataRows(rows);
-          setHasDefaultData(false);
-          setLoadingStatus(`Parquet metadata loaded: ${rows.length} rows`);
-          setLoadingProgress(0);
-  
-          const edgeUrl = import.meta.env.BASE_URL + 'data/mock_edges.parquet';
-          const edgeResp = await fetch(edgeUrl);
-          const edgeBuf = await edgeResp.arrayBuffer();
-          const edgeRowsArr = await parquetReadObjects({ file: edgeBuf });
-          setEdgeRows(edgeRowsArr);
-          setUseEdgeList(true);
-          setGraphmlString('');
-          setHasDefaultData(false);
-          setLoadingStatus('Parquet edges loaded, ready to process graph...');
-          setLoadingProgress(100);
-        } catch (error) {
-          setLoadingStatus('Error loading data: ' + error.message);
-          setIsLoading(false);
-          setLoadingProgress(0);
-        } finally {
-          setIsLoading(false);
+        setLoadingStatus(LOADING_STATES[0]);
+        
+        console.log('[App] Loading node data...');
+        // 1. Load node data
+        const url = import.meta.env.BASE_URL + 'data/scatter_small.parquet';
+        console.log('[App] Fetching from:', url);
+        
+        const response = await fetch(url);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch node data: ${response.status} ${response.statusText}`);
         }
-      })();
-    }
-  }, [hasDefaultData, graphmlString]);
-  
+        
+        const buffer = await response.arrayBuffer();
+        const rows = await parquetReadObjects({ file: buffer });
+        console.log('[App] Node data loaded:', rows.length, 'rows');
+        
+        if (!mounted) return;
+        
+        setMetadataRows(rows);
+        setLoadingProgress(25);
+        setLoadingStage(1);
+        setLoadingStatus(LOADING_STATES[1]);
+        
+        // Small delay to show progress
+        await new Promise(res => setTimeout(res, 300));
+        
+        console.log('[App] Loading edge data...');
+        // 2. Load edge data
+        const edgeUrl = import.meta.env.BASE_URL + 'data/mock_edges.parquet';
+        console.log('[App] Fetching edges from:', edgeUrl);
+        
+        const edgeResp = await fetch(edgeUrl);
+        if (!edgeResp.ok) {
+          throw new Error(`Failed to fetch edge data: ${edgeResp.status} ${edgeResp.statusText}`);
+        }
+        
+        const edgeBuf = await edgeResp.arrayBuffer();
+        const edgeRowsArr = await parquetReadObjects({ file: edgeBuf });
+        console.log('[App] Edge data loaded:', edgeRowsArr.length, 'rows');
+        
+        if (!mounted) return;
+        
+        setEdgeRows(edgeRowsArr);
+        setLoadingProgress(50);
+        setLoadingStage(2);
+        setLoadingStatus(LOADING_STATES[2]);
+        
+        // 3. Simulate network creation
+        await new Promise(res => setTimeout(res, 400));
+        setLoadingProgress(75);
+        setLoadingStage(3);
+        setLoadingStatus(LOADING_STATES[3]);
+        
+        // 4. Simulate coloring
+        await new Promise(res => setTimeout(res, 400));
+        setLoadingProgress(100);
+        
+        console.log('[App] Data loading complete!');
+        setTimeout(() => {
+          if (mounted) {
+            setIsLoading(false);
+            setIsReady(true);
+            setIsNetworkReady(false); // Reset network ready state
+          }
+        }, 400);
+        
+      } catch (error) {
+        console.error('Main thread loading error:', error);
+        setLoadingStatus('Error loading data: ' + error.message);
+        setIsLoading(false);
+      }
+    };
+
+    const loadDataWithWorker = async () => {
+      // Check for Web Worker support
+      if (typeof Worker === 'undefined') {
+        console.warn('Web Workers not supported, falling back to main thread loading');
+        return loadDataMainThread();
+      }
+
+      try {
+        console.log('[App] Attempting to create Web Worker...');
+        // Create worker
+        worker = new Worker(new URL('./dataWorker.js', import.meta.url), { type: 'module' });
+        
+        // Set up worker message handling
+        worker.onmessage = (event) => {
+          const { type, stage, progress, status, data, error } = event.data;
+          
+          if (!mounted) return;
+          
+          switch (type) {
+            case 'PROGRESS_UPDATE':
+              setLoadingStage(stage);
+              setLoadingProgress(progress);
+              setLoadingStatus(status);
+              break;
+              
+            case 'NODE_DATA_LOADED':
+              setMetadataRows(data);
+              break;
+              
+            case 'EDGE_DATA_LOADED':
+              setEdgeRows(data);
+              break;
+              
+            case 'LOADING_COMPLETE':
+              setTimeout(() => {
+                if (mounted) {
+                  setIsLoading(false);
+                  setIsReady(true);
+                  setIsNetworkReady(false); // Reset network ready state
+                }
+              }, 500); // Small delay to show completion
+              break;
+              
+            case 'LOADING_ERROR':
+              console.error('Worker loading error:', error);
+              setLoadingStatus('Worker failed, falling back to main thread...');
+              // Fallback to main thread
+              setTimeout(() => loadDataMainThread(), 1000);
+              break;
+          }
+        };
+        
+        worker.onerror = (error) => {
+          console.error('Worker error:', error);
+          if (mounted) {
+            console.log('[App] Worker failed, falling back to main thread');
+            worker.terminate();
+            worker = null;
+            // Fallback to main thread
+            setTimeout(() => loadDataMainThread(), 1000);
+          }
+        };
+        
+        // Start loading
+        setIsLoading(true);
+        setIsReady(false);
+        setLoadingStage(0);
+        setLoadingProgress(0);
+        setLoadingStatus(LOADING_STATES[0]);
+        
+        console.log('[App] Sending work to worker...');
+        // Send work to worker
+        worker.postMessage({
+          type: 'LOAD_DATA',
+          baseUrl: import.meta.env.BASE_URL
+        });
+        
+      } catch (error) {
+        console.error('Failed to create worker:', error);
+        loadDataMainThread();
+      }
+    };
+
+    // Start with main thread loading for reliability
+    console.log('[App] Starting data loading process...');
+    loadDataMainThread();
+
+    // Cleanup
+    return () => {
+      mounted = false;
+      if (worker) {
+        worker.terminate();
+      }
+    };
+  }, []); // Empty dependency array - only run on mount
 
   // Effect: generate plasmid map viewer HTML when a gene node is selected
   useEffect(() => {
@@ -163,212 +297,211 @@ function App() {
       setShowIframe(false);
       return;
     }
-    // Build JSON URL based on gene id
-    const object = { id: highlightedNode };
-    const idForUrl = object.id.startsWith('IMGPR') ? object.id.split('|')[0] : object.id;
-    const jsonUrl = `https://raw.githubusercontent.com/pentamorfico/plsdb_imgpr_json/refs/heads/master/${idForUrl}.json`;
-    // Full HTML content for CGV viewer
-    const htmlContent = `<!DOCTYPE html>
-<html>
-<head>
-  <title>CGV Viewer</title>
-  <!-- Load Roboto font -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Roboto&display=swap" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/gh/pentamorfico/plsdb_imgpr_json@refs/heads/master/svgcanvas.iife.js"></script>
-  <script src="https://d3js.org/d3.v7.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/cgview/dist/cgview.min.js"></script>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/cgview/dist/cgview.css">
-  <style>
-    body { margin: 0; font-family: 'Roboto', sans-serif; }
-    #my-viewer { width: 100%; height: 100%; }
-  </style>
-</head>
-<body>
-  <div id="my-viewer"></div>
-  <script>
-    const cgv = new CGV.Viewer('#my-viewer', { height: 350, width: 350, format: 'circular', SVGContext: svgcanvas.Context });
-    fetch('${jsonUrl}').then(r => r.json()).then(json => { cgv.io.loadJSON(json); cgv.draw(); });
-  </script>
-</body>
-</html>`;
-    const blob = new Blob([htmlContent], { type: 'text/html' });
-    const blobUrl = URL.createObjectURL(blob);
-    setIframeSrc(blobUrl);
-    setShowIframe(true);
-    return () => URL.revokeObjectURL(blobUrl);
+
+    const worker = new Worker(new URL('./iframeWorker.js', import.meta.url), { type: 'module' });
+
+    worker.onmessage = (event) => {
+      const { type, htmlContent, error } = event.data;
+
+      if (type === 'IFRAME_LOADED') {
+        const blob = new Blob([htmlContent], { type: 'text/html' });
+        const blobUrl = URL.createObjectURL(blob);
+        setIframeSrc(blobUrl);
+        setShowIframe(true);
+        return () => URL.revokeObjectURL(blobUrl);
+      }
+
+      if (type === 'IFRAME_ERROR') {
+        console.error('Error loading iframe:', error);
+      }
+    };
+
+    worker.postMessage({ type: 'LOAD_IFRAME', id: highlightedNode });
+
+    return () => {
+      worker.terminate();
+    };
   }, [highlightedNode]);
 
+  // --- Elegant Plasmid DNA Loading Animation ---
   return (
     <>
-      {/* Debug: show colorBy and csvColumns */}
-      
-      {/* Loading overlay */}
-      {(isLoading || isProcessingGraph) && (
-        <div style={{ 
-          position: 'fixed', 
-          inset: 0, 
-          backgroundColor: 'rgba(255, 255, 255, 0.95)', 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'center', 
-          zIndex: 1000,
-          flexDirection: 'column',
-          gap: 20
-        }}>
-          <div style={{ 
-            width: 80, 
-            height: 80, 
-            border: '8px solid #f3f3f3', 
-            borderTop: '8px solid #3498db', 
-            borderRadius: '50%',
-            animation: 'spin 1s linear infinite',
-            marginBottom: 10
-          }} />
-          <div style={{ fontSize: 22, color: '#333', fontWeight: 'bold', letterSpacing: 0.5 }}>
-            {isProcessingGraph ? 'Processing graph data...' : (loadingStatus || 'Loading data...')}
-          </div>
-          {loadingProgress > 0 && !isProcessingGraph && (
-            <div style={{ width: 400, maxWidth: '80vw' }}>
-              <div style={{ 
-                width: '100%', 
-                height: 24, 
-                backgroundColor: '#f0f0f0', 
-                borderRadius: 12,
-                overflow: 'hidden',
-                marginBottom: 6
-              }}>
-                <div style={{ 
-                  width: `${loadingProgress}%`, 
-                  height: '100%', 
-                  backgroundColor: '#3498db',
-                  transition: 'width 0.3s ease'
-                }} />
-              </div>
-              <div style={{ textAlign: 'center', fontSize: 16, color: '#666' }}>
-                {loadingProgress.toFixed(1)}%
-              </div>
+      {(isLoading || !isNetworkReady) && (
+        <div className="loading-container">
+          <div className="plasmid-container">
+            <div className="plasmid-circle pulse"></div>
+            <div className="center-dot"></div>
+            <div className="gene-track">
+              <div className="gene gene-1 long"></div>
+              <div className="gene gene-2 type-2 short"></div>
+              <div className="gene gene-3 type-3 medium"></div>
+              <div className="gene gene-4 type-4 long"></div>
+              <div className="gene gene-5 short"></div>
+              <div className="gene gene-6 type-2 medium"></div>
+              <div className="gene gene-7 type-3 long"></div>
+              <div className="gene gene-8 type-4 short"></div>
             </div>
-          )}
+          </div>
+          <div className="loading-text">
+            {!isNetworkReady && isReady ? 'Finalizing network visualization...' : loadingStatus}
+          </div>
+          
+          <div className="progress-container">
+            <div className="progress-bar">
+              <div 
+                className="progress-fill" 
+                style={{width: `${!isNetworkReady && isReady ? 95 : loadingProgress}%`}}
+              ></div>
+            </div>
+            <div className="progress-dots">
+              <div className="dot"></div>
+              <div className="dot"></div>
+              <div className="dot"></div>
+              <div className="dot"></div>
+            </div>
+          </div>
         </div>
       )}
-      
-      <div style={{ position: 'absolute', top: 10, left: 10, zIndex: 20, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-        {/* Only show controls if data is loaded */}
-        {(graphmlString || edgeRows.length > 0) && (
+
+      {/* Always render the network, but hide it until ready */}
+      <div style={{ 
+        width: '100vw', 
+        height: '100vh',
+        visibility: isReady && isNetworkReady ? 'visible' : 'hidden',
+        position: 'absolute',
+        top: 0,
+        left: 0
+      }}>
+        {isReady && (
           <>
-            {/* Color by selector label */}
-            <span style={{ fontSize: 13, marginRight: 6, whiteSpace: 'nowrap' }}>Color by:</span>
-            <select value={String(colorBy)} onChange={e => setColorBy(String(e.target.value))} style={{ background: 'rgba(255,255,255,0.7)', borderRadius: 4 }}>
-              {csvColumns.map(col => (
-                <option key={col} value={col}>{col}</option>
-              ))}
-            </select>
-            <div style={{ position: 'relative', display: 'inline-block' }}>
-              <input
-                type="text"
-                placeholder="Search node id..."
-                style={{ background: 'rgba(255,255,255,0.7)', borderRadius: 4, padding: '2px 6px', minWidth: 120 }}
-                value={searchId}
-                onChange={e => setSearchId(e.target.value)}
-                onKeyDown={e => {
-                  if (e.key === 'Enter') {
-                    setZoomToId(searchId);
-                    setHighlightedNode(searchId);
-                  }
-                }}
-                autoComplete="off"
-                onBlur={() => setFilteredOptions([])}
-              />
-              {filteredOptions.length > 0 && (
-                <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'white', border: '1px solid #ccc', zIndex: 100, maxHeight: 180, overflowY: 'auto' }}>
-                  {filteredOptions.map(option => (
-                    <div
-                      key={option}
-                      style={{ padding: '2px 6px', cursor: 'pointer' }}
-                      onMouseDown={() => {
-                        setSearchId(option);
-                        setZoomToId(option);
-                        setHighlightedNode(option);
+            <div style={{ 
+                position: 'absolute', 
+                top: 10, 
+                left: 0, // align to the very left
+                width: '100vw', // span the full width
+                zIndex: 20, 
+                display: 'flex', 
+                gap: 8, 
+                flexWrap: 'wrap',
+                alignItems: 'center', // vertical alignment
+                justifyContent: 'flex-start', // align all to the left
+                paddingLeft: 10, // add a little padding
+                paddingRight: 10
+              }}>
+              {(edgeRows.length > 0) && (
+                <>
+                  {/* Color by selector label */}
+                  <span style={{ fontSize: 13, marginRight: 6, whiteSpace: 'nowrap', marginTop: 0 }}>Color by:</span>
+                  <select value={String(colorBy)} onChange={e => setColorBy(String(e.target.value))} style={{ background: 'rgba(255,255,255,0.7)', borderRadius: 4 }}>
+                    {csvColumns.map(col => (
+                      <option key={col} value={col}>{col}</option>
+                    ))}
+                  </select>
+                  <div style={{ position: 'relative', display: 'inline-block' }}>
+                    <input
+                      type="text"
+                      placeholder="Search node id..."
+                      style={{ background: 'rgba(255,255,255,0.7)', borderRadius: 14, padding: '2px 6px', minWidth: 120 }}
+                      value={searchId}
+                      onChange={e => setSearchId(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          setZoomToId(searchId);
+                          setHighlightedNode(searchId);
+                        }
                       }}
-                    >{option}</div>
-                  ))}
-                </div>
+                      autoComplete="off"
+                      onBlur={() => setFilteredOptions([])}
+                    />
+                    {filteredOptions.length > 0 && (
+                      <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'white', border: '1px solid #ccc', zIndex: 100, maxHeight: 180, overflowY: 'auto' }}>
+                        {filteredOptions.map(option => (
+                          <div
+                            key={option}
+                            style={{ padding: '2px 6px', cursor: 'pointer' }}
+                            onMouseDown={() => {
+                              setSearchId(option);
+                              setZoomToId(option);
+                              setHighlightedNode(option);
+                            }}
+                          >{option}</div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {/* Toggle dynamic edges on click/highlight/zoom */}
+                  <button onClick={() => setEnableDynamicEdges(!enableDynamicEdges)} style={buttonStyle}>
+                    {enableDynamicEdges ? 'Disable Dynamic Edges' : 'Enable Dynamic Edges'}
+                  </button>
+                  {/* Existing edge toggle */}
+                  <button onClick={() => setEdgeMode(edgeMode === 'none' ? 'all' : 'none')} style={buttonStyle}>
+                    {edgeMode === 'none' ? 'Show All Edges (slow)' : 'Hide Edges'}
+                  </button>
+                  {/* Toggle map visibility */}
+                  <button onClick={() => setShowIframe(!showIframe)} style={buttonStyle}>
+                    {showIframe ? 'Hide Genome Map' : 'Show Genome Map'}
+                  </button>
+                  <button onClick={() => setShowLabels(prev => !prev)} style={buttonStyle}>
+                    {showLabels ? 'Hide Labels' : 'Show Labels'}
+                  </button>
+                  <button onClick={() => setShowPTUs(prev => !prev)} style={buttonStyle}>
+                    {showPTUs ? 'Hide PTUs' : 'Show PTUs'}
+                  </button>
+                  {/* Export network snapshot */}
+                  <button onClick={() => {
+                      if (sigmaRef.current) downloadAsPNG(sigmaRef.current, { height: 800, width: 800 });
+                    }}
+                    style={buttonStyle}>
+                     Download PNG
+                   </button>
+                </>
               )}
             </div>
-            {/* Toggle dynamic edges on click/highlight/zoom */}
-            <button onClick={() => setEnableDynamicEdges(!enableDynamicEdges)} style={{ background: 'rgba(255,255,255,0.7)', borderRadius: 4, padding: '2px 6px' }}>
-              {enableDynamicEdges ? 'Disable Dynamic Edges' : 'Enable Dynamic Edges'}
-            </button>
-            {/* Existing edge toggle */}
-            <button onClick={() => setEdgeMode(edgeMode === 'none' ? 'all' : 'none')} style={{ background: 'rgba(255,255,255,0.7)', borderRadius: 4, padding: '2px 6px' }}>
-              {edgeMode === 'none' ? 'Show All Edges (slow)' : 'Hide Edges'}
-            </button>
-            {/* Toggle map visibility */}
-            <button onClick={() => setShowIframe(!showIframe)} style={{ background: 'rgba(255,255,255,0.7)', borderRadius: 4, padding: '2px 6px' }}>
-              {showIframe ? 'Hide Genome Map' : 'Show Genome Map'}
-            </button>
-            <button onClick={() => setShowLabels(prev => !prev)} style={{ background: 'rgba(255,255,255,0.7)', borderRadius: 4, padding: '2px 6px' }}>
-              {showLabels ? 'Hide Labels' : 'Show Labels'}
-            </button>
-            <button onClick={() => setShowPTUs(prev => !prev)} style={{ background: 'rgba(255,255,255,0.7)', borderRadius: 4, padding: '2px 6px' }}>
-              {showPTUs ? 'Hide PTUs' : 'Show PTUs'}
-            </button>
-            {/* Export network snapshot */}
-            <button onClick={() => {
-                if (sigmaRef.current) downloadAsPNG(sigmaRef.current, { height: 800, width: 800 });
+
+            {/* Render network canvas */}
+            <SigmaNetwork
+              edgeRows={edgeRows}
+              metadataRows={metadataRows}
+              colorBy={colorBy}
+              highlightedNode={highlightedNode}
+              hoveredNode={hoveredNode}
+              edgeMode={edgeMode}
+              enableDynamicEdges={enableDynamicEdges}
+              zoomToId={zoomToId}
+              setHoveredNode={setHoveredNode}
+              setHighlightedNode={setHighlightedNode}
+              showLabels={showLabels}
+              showPTULabels={showPTUs}
+              onSigmaInit={sigma => { sigmaRef.current = sigma; }}
+              onNetworkReady={() => {
+                console.log('[App] Network is fully ready and colored!');
+                setIsNetworkReady(true);
               }}
-              style={{ background: 'rgba(255,255,255,0.7)', borderRadius: 4, padding: '2px 6px' }}>
-              Download PNG
-            </button>
+            />
+
+            {/* Optional genome map iframe */}
+            {showIframe && iframeSrc && isNetworkReady && (
+              <div style={{ 
+                  position: 'absolute', 
+                  bottom: 10, 
+                  left: 10, 
+                  width: 355.5, 
+                  height: 355.5, 
+                  zIndex: 15, 
+                  backgroundColor: '#fff', 
+                borderRadius: 0,  
+                  borderWidth: 0,
+                  border: 'none', 
+                  overflow: 'hidden',
+                  boxShadow: 'none' 
+                }}>
+
+                <iframe src={iframeSrc} title="Genome Map" style={{ width: '100%', height: '100%' }} />
+              </div>
+            )}
           </>
         )}
       </div>
-
-      {/* Render network canvas */}
-      <div style={{ width: '100vw', height: '100vh' }}>
-        <SigmaNetwork
-          graphmlString={graphmlString}
-          edgeRows={edgeRows}
-          useEdgeList={useEdgeList}
-          metadataRows={metadataRows}
-          colorBy={colorBy}
-          highlightedNode={highlightedNode}
-          hoveredNode={hoveredNode}
-          edgeMode={edgeMode}
-          enableDynamicEdges={enableDynamicEdges}
-          zoomToId={zoomToId}
-          setHoveredNode={setHoveredNode}
-          setHighlightedNode={setHighlightedNode}
-          onGraphProcessingStart={() => setIsProcessingGraph(true)}
-          onGraphProcessingDone={handleGraphProcessingDone}
-          showLabels={showLabels}
-          showPTULabels={showPTUs}
-          onSigmaInit={sigma => { sigmaRef.current = sigma; }}
-        />
-      </div>
-
-      {/* Optional genome map iframe */}
-      {showIframe && iframeSrc && (
-        <div style={{ 
-            position: 'absolute', 
-            bottom: 10, 
-            left: 10, 
-            width: 355.5, 
-            height: 355.5, 
-            zIndex: 15, 
-            backgroundColor: '#fff', 
-          borderRadius: 0,  
-            borderWidth: 0,
-            border: 'none', 
-            overflow: 'hidden',
-            boxShadow: 'none' 
-          }}>
-
-          <iframe src={iframeSrc} title="Genome Map" style={{ width: '100%', height: '100%' }} />
-        </div>
-      )}
     </>
   );
 }

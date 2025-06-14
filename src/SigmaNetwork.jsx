@@ -1,16 +1,14 @@
-import { useEffect, useRef, useState, useMemo } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import Sigma from 'sigma';
 import Graph from 'graphology';
-import { parse } from 'graphology-graphml/browser';
 import { EdgeLineProgram, NodePointProgram } from 'sigma/rendering';
 import { bindWebGLLayer, createContoursProgram } from '@sigma/layer-webgl';
 import iwanthue from 'iwanthue';
 import { getSequentialColors, getPalettes } from 'dicopal';
+import { flushSync } from 'react-dom';
 
 function SigmaNetwork({
-  graphmlString,
   edgeRows = [],
-  useEdgeList = false,
   metadataRows = [],
   colorBy = 'group',
   highlightedNode,
@@ -20,10 +18,9 @@ function SigmaNetwork({
   zoomToId,
   setHoveredNode,
   setHighlightedNode,
-  onGraphProcessingStart,
-  onGraphProcessingDone,
-  showLabels,
   onSigmaInit, // new callback prop
+  onNetworkReady, // callback when network is fully loaded and colored
+  showLabels,
   showPTULabels,
 }) {
   const containerRef = useRef(null);
@@ -31,6 +28,7 @@ function SigmaNetwork({
   const metadataRef = useRef(null);
   const allEdgesRef = useRef([]);
   const ptuPaletteRef = useRef({});
+  const networkReadyCalledRef = useRef(false); // Track if network ready has been called
   const [communities, setCommunities] = useState([]);
   const [palette, setPalette] = useState({});
   const [visibleComms, setVisibleComms] = useState(new Set());
@@ -51,10 +49,41 @@ function SigmaNetwork({
   const [isReversed, setIsReversed] = useState(false);
   // Array state for legend gradient stops
   const [numericPaletteState, setNumericPaletteState] = useState([]);
+  const [showLegend, setShowLegend] = useState(false);
+  // Shared style for all panel buttons
+  const buttonStyle = {
+    padding: '6px 12px',
+    background: '#fff',
+    color: '#000',
+    border: '1px solid #ccc',
+    borderRadius: 14,
+    cursor: 'pointer',
+    fontSize: '11px'
+  };
 
   // Ref to always get latest enableDynamicEdges in callbacks
   const enableDynamicEdgesRef = useRef(enableDynamicEdges);
   useEffect(() => { enableDynamicEdgesRef.current = enableDynamicEdges; }, [enableDynamicEdges]);
+
+  // Helper to call onNetworkReady only once per network load
+  const callNetworkReady = () => {
+    if (!networkReadyCalledRef.current && onNetworkReady) {
+      console.log('[SigmaNetwork] Network is fully ready and colored!');
+      networkReadyCalledRef.current = true;
+      setTimeout(() => {
+        onNetworkReady();
+      }, 100);
+    }
+  };
+
+  // Flag to track if this is initial data load (not just color change)
+  const isInitialLoadRef = useRef(true);
+
+  // Reset network ready flag only when actual data changes (not color changes)
+  useEffect(() => {
+    networkReadyCalledRef.current = false;
+    isInitialLoadRef.current = true; // Mark as initial load
+  }, [edgeRows, metadataRows]);
 
   // Build metadata map directly
   useEffect(() => {
@@ -108,7 +137,12 @@ function SigmaNetwork({
           setTimeout(() => updateEdgesForHighlight(node), 0);
         }
       });
-      // Extract communities once graph is live
+      // Clear highlighted node when clicking empty stage
+      sigmaInstance.current.on('clickStage', () => {
+        setHighlightedNode?.(null);
+        setHoveredNode?.(null);
+      });
+      // Extract communities once graph is live - but don't call network ready yet
       handleCommunities(graph);
 
       // --- PTU cluster labels overlay ---
@@ -142,8 +176,10 @@ function SigmaNetwork({
           avg.y /= cluster.positions.length;
           const vp = renderer.graphToViewport(avg);
           html += `<div id="ptu-${cluster.label}" class="ptuLabel" ` +
-                  `style="position:absolute;top:${vp.y}px;left:${vp.x}px;` +
-                  `color:${cluster.color};font-size:12px;pointer-events:none;">` +
+                  `style="position:absolute !important;top:${vp.y}px !important;left:${vp.x}px !important;` +
+                  `color:${cluster.color} !important;font-size:102px !important;pointer-events:none !important;` +
+                  `transform:translate(-100%,-50%) !important;font-weight:bold !important;text-align:right !important;` +
+                  `z-index:1000 !important;font-family:Arial,sans-serif !important;">` +
                   `${cluster.label}</div>`;
         });
         labelsLayer.innerHTML = html;
@@ -152,7 +188,7 @@ function SigmaNetwork({
         // Update positions on each render
         renderer.on('afterRender', () => {
           Object.values(ptuMap).forEach(cluster => {
-            const avg = cluster.positions.reduce((acc, p) => ({ x: acc.x + p.x, y: acc.y + p.y }), { x: 0, y: 0 });
+            const avg = cluster.positions.reduce((acc, p) => ({ x: acc.x + p.x-200, y: acc.y + p.y }), { x: 0, y: 0 });
             avg.x /= cluster.positions.length; avg.y /= cluster.positions.length;
             const vp = renderer.graphToViewport(avg);
             const el = document.getElementById(`ptu-${cluster.label}`);
@@ -190,29 +226,29 @@ function SigmaNetwork({
     setHighlightedNode?.(null);
   };
 
-  // Effect: show/hide nodes when visibleComms changes
+  // Effect: show/hide nodes when visibleComms or numeric mode change, but only when palette ready
   useEffect(() => {
     const inst = sigmaInstance.current;
-    if (!inst) return;
+    if (!inst || Object.keys(palette).length === 0) return; // wait for palette
     // Skip hiding behavior when numeric coloring is active
     if (isNumeric) {
-      inst.refresh();
+      inst.refresh({ skipIndexation: true });
       return;
     }
     const graph = inst.getGraph();
     graph.forEachNode((node, attrs) => {
       const v = attrs[colorBy];
-      // Hide any category (including empty string) if it's not in the visible set
       const hidden = v != null && !visibleComms.has(v);
       graph.setNodeAttribute(node, 'hidden', hidden);
     });
-    inst.refresh();
-  }, [visibleComms, isNumeric]);
+    inst.refresh({ skipIndexation: true });
+  }, [visibleComms, isNumeric, palette]);
 
   // Apply dynamic coloring and use built-in highlighted flag for selected and community highlights
   useEffect(() => {
     const s = sigmaInstance.current;
-    if (!s) return;
+    if (!s || Object.keys(palette).length === 0) return; // Don't refresh with empty palette
+    
     s.setSetting('nodeReducer', (node, data) => {
       // Choose color from numeric palette (node-keyed) or categorical (value-keyed)
       const color = isNumeric
@@ -231,12 +267,21 @@ function SigmaNetwork({
      }
      return newData;
    });
+   
+   // Only refresh after palette is set and ready
    s.refresh({ skipIndexation: true });
- }, [palette, colorBy, highlightedComms, highlightedNode, hoveredNode, showLabels, edgeMode, isNumeric]);
+ }, [palette, highlightedComms, highlightedNode, hoveredNode, showLabels, edgeMode, isNumeric]);
+
+  // Separate effect to call network ready only after initial load and coloring
+  useEffect(() => {
+    if (isInitialLoadRef.current && Object.keys(palette).length > 0 && sigmaInstance.current) {
+      isInitialLoadRef.current = false;
+      setTimeout(() => callNetworkReady(), 100);
+    }
+  }, [palette]);
 
   // Build graph directly from Parquet rows
   const loadFromEdgeList = async () => {
-    onGraphProcessingStart?.();
     // build graph and edge list
     const graph = new Graph();
     const edges = edgeRows.map(r => ({
@@ -257,42 +302,6 @@ function SigmaNetwork({
     // add edges if mode=all
     if (edgeMode === 'all') edges.forEach(e => { try { graph.addEdge(e.source, e.target, e.attributes); } catch {} });
     renderGraph(graph);
-    onGraphProcessingDone?.();
-  };
-
-  const loadFromGraphML = (graphmlText) => {
-    if (onGraphProcessingStart) onGraphProcessingStart();
-    const graph = parse(Graph, graphmlText);
-    // store all edges
-    allEdgesRef.current = graph.edges().map(edge => ({
-      source: graph.source(edge),
-      target: graph.target(edge),
-      attributes: graph.getEdgeAttributes(edge)
-    }));
-
-    // If edgeMode none, clear edges; else keep
-    if (edgeMode === 'none') graph.clearEdges();
-
-    graph.forEachNode((node, attrs) => {
-      const meta = metadataRef.current?.[node];
-      if (meta) {
-        Object.entries(meta).forEach(([k, v]) => {
-          if (k !== 'id' && k !== 'type') graph.setNodeAttribute(node, k, v);
-        });
-      }
-     let x = parseFloat(attrs.x ?? attrs.d0);
-      let y = parseFloat(attrs.y ?? attrs.d1);
-      if (isNaN(x)) x = Math.random() * 10;
-      if (isNaN(y)) y = Math.random() * 10;
-      graph.setNodeAttribute(node, 'x', x);
-      graph.setNodeAttribute(node, 'y', y);
-      graph.setNodeAttribute(node, 'size', 2);
-      // Also set the node's label to its id
-      graph.setNodeAttribute(node, 'label', node);
-    });
-
-    renderGraph(graph);
-    if (onGraphProcessingDone) onGraphProcessingDone();
   };
 
   // helper: update edges for a single node highlight
@@ -351,15 +360,15 @@ function SigmaNetwork({
   }, [enableDynamicEdges, edgeMode]);
 
   useEffect(() => {
-    if (useEdgeList && edgeRows.length) loadFromEdgeList();
-    else if (graphmlString) loadFromGraphML(graphmlString);
-  }, [graphmlString, edgeRows, useEdgeList, metadataRows, edgeMode]);
+    if (edgeRows.length && metadataRows.length) loadFromEdgeList();
+  }, [edgeRows, metadataRows, edgeMode]);
 
   // Recompute legend/palette and visible set when colorBy changes
   useEffect(() => {
     const inst = sigmaInstance.current;
     if (!inst) return;
     const graph = inst.getGraph();
+    // Don't reset isInitialLoadRef for color changes - only for data changes
     handleCommunities(graph);
   }, [colorBy, sequentialPaletteName, isReversed]);
 
@@ -444,170 +453,127 @@ function SigmaNetwork({
     }
   }, [showPTULabels, palette]);
 
-  // Compute community list & palette when graph is rendered
-  const handleCommunities = graph => {
-     // Precompute PTU palette including missing values (empty) in light gray
-     const ptuSet = new Set();
-     graph.forEachNode((n, attrs) => {
-       const v = attrs.new_PTU;
-       ptuSet.add(v != null && v !== '' ? v : '');
-     });
-     const ptuList = Array.from(ptuSet);
-     const ptuColors = iwanthue(ptuList.length) || [];
-     const ptuPal = {};
-     ptuList.forEach((ptu, i) => {
-       ptuPal[ptu] = ptu === '' ? '#d3d3d3' : (ptuColors[i] || '#888');
-     });
-     ptuPaletteRef.current = ptuPal;
-
-    // Determine nodes and values for colorBy
+  // Compute community list & palette when graph is rendered, batching state updates to avoid intermediate empty palette
+  const handleCommunities = (graph) => {
+    // Always precompute PTU palette for PTU label overlay (regardless of current colorBy)
+    const ptuSet = new Set();
+    graph.forEachNode((n, attrs) => {
+      const v = attrs.new_PTU;
+      ptuSet.add(v != null && v !== '' ? v : '');
+    });
+    const ptuList = Array.from(ptuSet);
+    const ptuColors = iwanthue(ptuList.length) || [];
+    const ptuPal = {};
+    ptuList.forEach((ptu, i) => {
+      ptuPal[ptu] = ptu === '' ? '#d3d3d3' : (ptuColors[i] || '#888');
+    });
+    ptuPaletteRef.current = ptuPal; // Always store PTU palette for label overlay
+    // Determine if numeric data
     const nodes = [];
     graph.forEachNode(node => nodes.push(node));
     const numericData = nodes.map(node => ({ node, v: Number(graph.getNodeAttribute(node, colorBy)) }))
       .filter(d => !isNaN(d.v));
-    // Numeric if all nodes have a valid number
     const numeric = numericData.length === nodes.length;
-    setIsNumeric(numeric);
+
+    // Prepare new state variables
+    let newPalette, newCommunities, newVisibleComms, newNumericPaletteState, newIsNumeric;
+
     if (colorBy === 'new_PTU') {
-      const pal = ptuPaletteRef.current;
-      setPalette(pal);
-      const commList = Object.keys(pal);
-      setCommunities(commList);
-      setVisibleComms(new Set(commList));
-      setIsNumeric(false);
-      return;
-    }
-    if (numeric) {
-      // Sort nodes by value
+      newPalette = ptuPal;
+      newCommunities = Object.keys(ptuPal);
+      newVisibleComms = new Set(newCommunities);
+      newIsNumeric = false;
+    } else if (numeric) {
+      // Numeric mode
       numericData.sort((a, b) => a.v - b.v);
-      // Store numeric domain and palette for legend
       const values = numericData.map(d => d.v);
       numericDomainRef.current = [values[0], values[values.length - 1]];
-      // Generate numeric palette via dicopal, reverse if toggled
       let palColors = getSequentialColors(sequentialPaletteName, numericData.length);
       if (isReversed) palColors = [...palColors].reverse();
-      numericPaletteRef.current = palColors;
-      // Store palette for nodes and legend
-      setNumericPaletteState(palColors);
       const palMap = {};
       numericData.forEach((d, i) => { palMap[d.node] = palColors[i] ?? '#888'; });
-      setPalette(palMap);
-      setCommunities([]);
-      setVisibleComms(new Set());
-      return;
+      newPalette = palMap;
+      newCommunities = [];
+      newVisibleComms = new Set();
+      newNumericPaletteState = palColors;
+      newIsNumeric = true;
+    } else {
+      // Categorical mode
+      const commSet = new Set();
+      graph.forEachNode((node, attrs) => {
+        const v = attrs[colorBy];
+        if (v != null) commSet.add(v);
+      });
+      const allComms = Array.from(commSet);
+      let colorsCat = iwanthue(allComms.length) || [];
+      for (let i = colorsCat.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [colorsCat[i], colorsCat[j]] = [colorsCat[j], colorsCat[i]];
+      }
+      const nonMissing = allComms.filter(c => c !== '').sort((a, b) => a.localeCompare(b));
+      const missing = allComms.includes('') ? [''] : [];
+      newCommunities = [...nonMissing, ...missing];
+      newVisibleComms = new Set(newCommunities);
+      const pal = {};
+      newCommunities.forEach((comm, i) => {
+        pal[comm] = comm === '' ? '#d3d3d3' : (colorsCat[i] ?? '#888');
+      });
+      newPalette = pal;
+      newIsNumeric = false;
     }
-    // Categorical branch
-    const commSet = new Set();
-    graph.forEachNode((node, attrs) => {
-      const v = attrs[colorBy];
-      if (v != null) commSet.add(v);
+
+    // Synchronously batch updates to avoid intermediate empty palette flashing
+    flushSync(() => {
+      setIsNumeric(newIsNumeric);
+      setPalette(newPalette);
+      setCommunities(newCommunities);
+      setVisibleComms(newVisibleComms);
+      if (newNumericPaletteState) setNumericPaletteState(newNumericPaletteState);
     });
-    const allComms = Array.from(commSet);
-    // Generate categorical palette via iwanthue
-    let colors = iwanthue(allComms.length) || [];
-    // Randomize order
-    for (let i = colors.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [colors[i], colors[j]] = [colors[j], colors[i]];
-    }
-    const nonMissing = allComms.filter(c => c !== '').sort((a, b) => a.localeCompare(b));
-    const missing = allComms.includes('') ? [''] : [];
-    const commList = [...nonMissing, ...missing];
-    const pal = {};
-    commList.forEach((comm, i) => {
-      pal[comm] = comm === '' ? '#d3d3d3' : (colors[i] ?? '#888');
-    });
-    setCommunities(commList);
-    setVisibleComms(new Set(commList));
-    setPalette(pal);
- };
+  };
+
+  // Determine which node info to display: clicked (highlighted) has priority over hover
+  const displayNode = highlightedNode || hoveredNode;
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-      <details style={{ position: 'absolute', top: 10, right: 10, zIndex: 20, background: 'rgba(255,255,255,0.9)', padding: 4, borderRadius: 4, fontSize: 12 }}>
-        <summary style={{ cursor: 'pointer', padding: '4px' }}>Legend</summary>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '4px', maxHeight: '50vh', overflowY: 'auto' }}>
-          {isNumeric ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: 6, flexDirection: 'column' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, width: '100%' }}>
-                <span style={{ fontSize: 13, whiteSpace: 'nowrap' }}>{numericDomainRef.current[0].toLocaleString()}</span>
-                {/* Gradient with full palette stops and reversal toggle */}
-                <div
-                  style={{
-                    flex: 1,
-                    height: 20,
-                    background: `linear-gradient(to right, ${numericPaletteState
-                        .map((c, i, arr) => `${c} ${(i / (arr.length - 1)) * 100}%`)
-                        .join(', ')} )`,
-                    border: '1px solid #ccc',
-                    borderRadius: 4,
-                  }}
-                />
-                <span style={{ fontSize: 13, whiteSpace: 'nowrap' }}>{numericDomainRef.current[1].toLocaleString()}</span>
-              </div>
-              <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 8, width: '100%' }}>
-                <label style={{ display: 'flex', alignItems: 'center', fontSize: 13 }}>
-                  <input
-                    type="checkbox"
-                    checked={isReversed}
-                    onChange={e => setIsReversed(e.target.checked)}
-                    style={{ marginRight: 4 }}
-                  />
-                  Reverse
-                </label>
-                <label style={{ fontSize: 13 }}>Palette:</label>
-                {/* Dropdown to select sequential palette dynamically */}
-                <select
-                  value={sequentialPaletteName}
-                  onChange={e => setSequentialPaletteName(e.target.value)}
-                  style={{ flex: 1, padding: '2px 4px', fontSize: 13 }}
-                >
-                  {paletteOptions.map(opt => (
-                    <option key={opt} value={opt}>{opt}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          ) : (
-            communities.map(comm => (
-              <label key={comm} style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', opacity: visibleComms.has(comm) ? 1 : 0.3 }}>
-                <span onClick={() => toggleComm(comm)} style={{ width: 12, height: 12, background: palette[comm], display: 'inline-block', borderRadius: 2, cursor: 'pointer' }} />
-                <span onClick={() => toggleHighlight(comm)} style={{ fontSize: 12, cursor: 'pointer', fontWeight: highlightedComms.has(comm) ? 'bold' : 'normal' }}>
-                  {comm === '' ? 'Missing' : comm}
+      <div ref={containerRef} className="sigma-container" style={{ width: '100%', height: '100%' }} />
+      {/* Bottom-right independent panels */}
+      <div style={{ position: 'absolute', bottom: 10, right: 10, zIndex: 20, display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+        {/* Hover/Click Info Panel */}
+        {displayNode && (
+          <div style={{ marginBottom: '6px', width: 220, maxHeight: '30vh', overflowY: 'auto', background: '#fff', border: '1px solid #ccc', borderRadius: 4, padding: '8px', fontSize: '11px', boxShadow: '0 2px 6px rgba(0,0,0,0.15)' }}>
+            <strong style={{ display: 'block', marginBottom: '4px' }}>{displayNode}</strong>
+            {metadataRef.current?.[displayNode] && Object.entries(metadataRef.current[displayNode]).map(([key, value]) => (
+              key !== 'id' && <div key={key} style={{ marginBottom: '3px' }}>{key}: {String(value)}</div>
+            ))}
+          </div>
+        )}
+        {/* Legend Panel */}
+        {showLegend && (
+          <div style={{ marginBottom: '16px', width: 220, maxHeight: '40vh', overflowY: 'auto', background: '#fff', border: '1px solid #ccc', borderRadius: 4, padding: '8px', fontSize: '11px', boxShadow: '0 2px 6px rgba(0,0,0,0.15)' }}>
+            <button onClick={toggleAll} style={{
+  ...buttonStyle,
+  width: '100%',
+  marginBottom: '10px',
+}}>
+              {visibleComms.size < communities.length ? 'Show All' : 'Hide All'}
+            </button>
+            {communities.map(comm => (
+              <div key={comm} style={{ display: 'flex', alignItems: 'center', marginBottom: '4px' }}>
+                <span onClick={() => toggleComm(comm)} style={{ width: '10px', height: '10px', backgroundColor: palette[comm], marginRight: '6px', cursor: 'pointer', opacity: visibleComms.has(comm) ? 1 : 0.3, flexShrink: 0 }} />
+                <span onClick={() => toggleHighlight(comm)} style={{ cursor: 'pointer', fontWeight: highlightedComms.has(comm) ? 'bold' : 'normal', fontSize: '11px' }}>
+                  {comm || '(missing)'}
                 </span>
-              </label>
-            ))
-          )}
-        </div>
-      </details>
-      <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
-      {/* Metadata info box */}
-      {(highlightedNode || hoveredNode) && metadataRef.current?.[highlightedNode || hoveredNode] && (
-        <div style={{
-          position: 'absolute',
-          bottom: 10,
-          right: 10,
-          zIndex: 25,
-          background: 'rgba(255,255,255,0.95)',
-          padding: 8,
-          maxWidth: 400,
-          maxHeight: '50vh',
-          overflowY: 'auto',
-          borderRadius: 4,
-          border: '1px solid #ccc',
-          fontSize: 12
-        }}>
-          <strong>{highlightedNode || hoveredNode}</strong>
-          <dl style={{ margin: 0, padding: 0 }}>
-            {Object.entries(metadataRef.current[highlightedNode || hoveredNode]).map(([k, v]) => (
-              <div key={k} style={{ display: 'flex' }}>
-                <dt style={{ fontWeight: 'bold', marginRight: 4 }}>{k}:</dt>
-                <dd style={{ margin: 0 }}>{v}</dd>
               </div>
             ))}
-          </dl>
-        </div>
-      )}
+          </div>
+        )}
+        {/* Legend Toggle Button */}
+        <button onClick={() => setShowLegend(prev => !prev)} style={buttonStyle}>
+          {showLegend ? 'Hide Legend' : 'Show Legend'}
+        </button>
+      </div>
     </div>
   );
 }
