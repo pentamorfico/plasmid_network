@@ -16,6 +16,8 @@ import iwanthue from "iwanthue"
 import { getSequentialColors } from "dicopal"
 import { sql, and, isNotNull, column } from "@uwdata/mosaic-sql"
 
+const BASE_URL = import.meta.env.BASE_URL
+
 const DEFAULT_CONFIG: CosmographConfig = {
   spaceSize: 8192,
   backgroundColor: [10, 12, 18, 1],
@@ -742,7 +744,7 @@ export function NetworkCosmograph({
     
     try {
       console.log('[loadPalettesFromFile] Loading pre-generated palettes...')
-      const response = await fetch('/data/color-palettes.json')
+      const response = await fetch(`${BASE_URL}data/color-palettes.json`)
       if (!response.ok) {
         console.warn('[loadPalettesFromFile] Could not load palettes file, will generate on demand')
         return
@@ -815,7 +817,9 @@ export function NetworkCosmograph({
 
     if (isNumericType(columnType)) {
       const palette = getSequentialColors("Viridis", 9)
-      applyPalette(palette, "continuous")
+      if (palette) {
+        applyPalette(palette, "continuous")
+      }
       return
     }
 
@@ -842,9 +846,9 @@ export function NetworkCosmograph({
       setError(null)
       try {
         const [pointsFile, linksFile, configJson] = await Promise.all([
-          fetchFile("/data/plasmid-network-points.parquet", "points.parquet"),
-          fetchFile("/data/plasmid-network-links.parquet", "links.parquet"),
-          fetch("/data/plasmid-network-config.json").then(async (res) => {
+          fetchFile(`${BASE_URL}data/plasmid-network-points.parquet`, "points.parquet"),
+          fetchFile(`${BASE_URL}data/plasmid-network-links.parquet`, "links.parquet"),
+          fetch(`${BASE_URL}data/plasmid-network-config.json`).then(async (res) => {
             if (!res.ok) return {}
             return res.json()
           }),
