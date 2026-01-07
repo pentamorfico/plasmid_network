@@ -1,79 +1,260 @@
+@import url("https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap");
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+}
+
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
-
-  color-scheme: light;
-  color: rgba(0, 0, 0, 0.87);
-  background-color: #ffffff;
-
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  --radius: 0.625rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
 }
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-a:hover {
-  color: #535bf2;
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
 }
 
-body {
-  margin: 0;
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    margin: 0;
+    min-height: 100vh;
+    font-family: "Space Grotesk", "Helvetica Neue", "Segoe UI", sans-serif;
+    font-weight: 500;
+  }
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  min-height: 100%;
+  overflow: hidden;
+}
+
+/* Theme-aware label background tokens */
+:root {
+  --plasmid-label-background: rgba(94, 94, 94, 0.192);
+  --plasmid-label-border: rgba(15, 64, 179, 0.12);
+  --plasmid-tooltip-bg: rgba(255, 255, 255, 0.92);
+  --plasmid-tooltip-text: #0f172a;
+  --plasmid-tooltip-border: rgba(15, 23, 42, 0.12);
+}
+.dark {
+  --plasmid-label-background: rgba(12, 15, 24, 0.75);
+  --plasmid-label-border: rgba(255, 255, 255, 0.12);
+  --plasmid-tooltip-bg: rgba(12, 15, 24, 0.92);
+  --plasmid-tooltip-text: #f8fafc;
+  --plasmid-tooltip-border: rgba(255, 255, 255, 0.12);
+}
+
+/* Cosmograph labels */
+[class*="cosmographLabelBase"] {
+  background: var(--plasmid-label-background) !important;
+  background-color: var(--plasmid-label-background) !important;
+  border: 1px solid var(--plasmid-label-border) !important;
+  border-radius: 8px !important;
+
+  /* Glassmorphism */
+  backdrop-filter: blur(8px) saturate(120%) !important;
+  -webkit-backdrop-filter: blur(8px) saturate(120%) !important;
+
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25) !important;
+  padding: 2px 6px !important;
+}
+
+.plasmid-tooltip {
+  background: var(--plasmid-tooltip-bg);
+  color: var(--plasmid-tooltip-text);
+  border: 1px solid var(--plasmid-tooltip-border);
+  border-radius: 10px;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.18);
+  padding: 10px 12px;
+  min-width: 160px;
+  font-size: 0.7rem;
+  line-height: 1.4;
+  backdrop-filter: blur(6px);
+}
+
+.plasmid-tooltip__title {
+  font-weight: 600;
+  font-size: 0.75rem;
+  margin-bottom: 4px;
+}
+
+.plasmid-tooltip__row {
   display: flex;
-  place-items: center;
-  min-width: 320px;
-  min-height: 100vh;
+  justify-content: space-between;
+  gap: 8px;
 }
 
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
+.plasmid-tooltip__label {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.6rem;
+  color: color-mix(in oklab, var(--plasmid-tooltip-text), transparent 35%);
 }
 
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  background-color: #1a1a1a;
-  cursor: pointer;
-  transition: border-color 0.25s;
-}
-button:hover {
-  border-color: #646cff;
+.plasmid-tooltip__value {
+  font-weight: 600;
 }
 
-/* Spinner animation for loading */
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
+.plasmid-spinner {
+  width: 90px;
+  height: 90px;
+  animation: plasmid-spin 1.8s linear infinite;
+  filter: blur(0.6px);
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
-  }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
+/* Glide Data Grid: smooth scrolling for internal viewport */
+/* En tu archivo CSS */
+.gdg-wrapper .dvn-scroller {
+  /* Esto hace que el scroll programático sea suave pero decidido */
+  scroll-behavior: smooth;
+  /* Opcional: mejora el rendimiento del scroll en Chrome */
+  will-change: transform;
+}
+
+.plasmid-spinner-track {
+  fill: none;
+  stroke-width: 7;
+}
+
+@keyframes plasmid-spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+/* ==========================================================
+   GLIDE DATA GRID - FIXES
+   ========================================================== */
+
+/* 1. Forzar fondo transparente para que el canvas respete el tema oscuro */
+.gdg-wrapper canvas {
+  background-color: transparent !important;
+}
+
+/* 2. Scrollbars personalizados usando tus variables CSS */
+.gdg-wrapper ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+  background: var(--background);
+}
+
+.gdg-wrapper ::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+.gdg-wrapper ::-webkit-scrollbar-thumb {
+  background: var(--sidebar-border); 
+  border-radius: 99px;
+  border: 2px solid var(--background); /* Efecto de padding */
+}
+
+.gdg-wrapper ::-webkit-scrollbar-thumb:hover {
+  background: var(--muted-foreground);
 }

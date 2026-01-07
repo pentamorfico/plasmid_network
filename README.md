@@ -1,52 +1,73 @@
-# Plasmid Defense Network Viewer
+# React + TypeScript + Vite
 
-![Network Diagram](docs/screen_record.gif)
+This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
-This [live application](https://pentamorfico.github.io/plasmid_network/) visualizes a biological plasmid network using Graphology and Sigma.js. It automatically loads metadata and edge data from Parquet files, builds an interactive graph, and allows real-time exploration of network structure and individual plasmid maps.
+Currently, two official plugins are available:
 
-## Features
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
 
-- **Color by Metadata**: Nodes are colored by any metadata field. Select a column from the dropdown to recolor the network.
-- **Search & Zoom**: Type a node ID into the search box; autocomplete suggestions appear after two characters. Press Enter or click a suggestion to zoom and highlight.
-- **Dynamic Edges**: When in **None** edge mode, clicking or highlighting a node shows only its immediate connections. Toggle **Enable Dynamic Edges** to switch between static and dynamic edge rendering.
-- **Show/Hide**: Buttons to show/hide all edges, toggle node labels, and display a detailed plasmid map in an embedded iframe.
-- **Legend Panel**: A collapsible legend listing metadata categories lets you filter (show/hide) or highlight entire groups of nodes.
-- **Performance**: Uses GPU-based rendering and a WebGL layer for large networks.
+## React Compiler
 
-## Getting Started
+The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
 
-1. **Install dependencies**
-   ```bash
-   npm install
-   ```
+## Expanding the ESLint configuration
 
-2. **Run in development**
-   ```bash
-   npm run dev
-   ```
-   Open http://localhost:5173 in your browser.
+If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
 
-3. **Build for production**
-   ```bash
-   npm run build
-   ```
+```js
+export default defineConfig([
+  globalIgnores(['dist']),
+  {
+    files: ['**/*.{ts,tsx}'],
+    extends: [
+      // Other configs...
 
-4. **Deploy to GitHub Pages**
-   ```bash
-   npm run deploy
-   ```
-   (Requires `gh-pages` configured in `package.json`.)
+      // Remove tseslint.configs.recommended and replace with this
+      tseslint.configs.recommendedTypeChecked,
+      // Alternatively, use this for stricter rules
+      tseslint.configs.strictTypeChecked,
+      // Optionally, add this for stylistic rules
+      tseslint.configs.stylisticTypeChecked,
 
-## How to Interact
+      // Other configs...
+    ],
+    languageOptions: {
+      parserOptions: {
+        project: ['./tsconfig.node.json', './tsconfig.app.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+      // other options...
+    },
+  },
+])
+```
 
-- **Color dropdown**: Pick a metadata field (e.g., `group`, `size`, custom CSV columns).
-- **Search box**: Type node IDs, use arrow keys or mouse to select, then Enter to zoom & highlight.
-- **Edges**:
-  - **Show All Edges** / **Hide Edges** toggles full network edges.
-  - **Enable Dynamic Edges** toggles on-click/hover edge display.
-- **Labels**: Toggle node labels on/off.
-- **Legend**:
-  - Click colored square to hide/show that category.
-  - Click category name to highlight all nodes in that group.
-  - **Show All** / **Hide All** buttons quickly toggle all categories.
-- **Plasmid Map**: When a node is clicked, an interactive plasmid viewer loads in the lower-left corner. Toggle its visibility with the **Show/Hide Genome Map** button.
+You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+
+```js
+// eslint.config.js
+import reactX from 'eslint-plugin-react-x'
+import reactDom from 'eslint-plugin-react-dom'
+
+export default defineConfig([
+  globalIgnores(['dist']),
+  {
+    files: ['**/*.{ts,tsx}'],
+    extends: [
+      // Other configs...
+      // Enable lint rules for React
+      reactX.configs['recommended-typescript'],
+      // Enable lint rules for React DOM
+      reactDom.configs.recommended,
+    ],
+    languageOptions: {
+      parserOptions: {
+        project: ['./tsconfig.node.json', './tsconfig.app.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+      // other options...
+    },
+  },
+])
+```
