@@ -237,7 +237,7 @@ export function NetworkCosmograph({
   const initialThemeIsDark =
     typeof document !== "undefined"
       ? document.documentElement.classList.contains("dark") ||
-        (localStorage.getItem("theme") ?? "light") === "dark"
+        localStorage.getItem("theme") === "dark"
       : false
   const [config, setConfig] = React.useState<CosmographConfig>(() => ({
     ...DEFAULT_CONFIG,
