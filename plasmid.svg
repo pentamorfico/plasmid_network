@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Outer plasmid ring -->
+  <circle cx="32" cy="32" r="26" fill="none" stroke="#F2748E" stroke-width="5" stroke-linecap="round"/>
+  
+  <!-- Gene segments on the plasmid -->
+  <path d="M 32 6 A 26 26 0 0 1 55.5 22" fill="none" stroke="#BADB9A" stroke-width="5" stroke-linecap="round"/>
+  <path d="M 50 48 A 26 26 0 0 1 32 58" fill="none" stroke="#98D3C4" stroke-width="5" stroke-linecap="round"/>
+  <path d="M 14 48 A 26 26 0 0 1 8.5 32" fill="none" stroke="#D9DAD9" stroke-width="5" stroke-linecap="round"/>
+  
+  <!-- Inner detail - small origin of replication marker -->
+  <circle cx="32" cy="32" r="6" fill="#F2748E" opacity="0.8"/>
+</svg>

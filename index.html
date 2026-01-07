@@ -2,14 +2,15 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/png" href="/plasmid.svg" id="favicon" />
+    <link rel="icon" type="image/svg+xml" href="./plasmid.svg" id="favicon" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Plasmid Defense Network</title>
     <script>
       // Animated favicon using Web Worker
       (function() {
         const favicon = document.getElementById('favicon');
-        const worker = new Worker('/favicon-worker.js');
+        const basePath = document.baseURI.replace(/\/[^\/]*$/, '/');
+        const worker = new Worker(basePath + 'favicon-worker.js');
         
         worker.postMessage({ type: 'init' });
         
@@ -20,8 +21,8 @@
         };
       })();
     </script>
-    <script type="module" crossorigin src="/plasmid_network/assets/index-BACs_cRs.js"></script>
-    <link rel="stylesheet" crossorigin href="/plasmid_network/assets/index-CHz26xh7.css">
+    <script type="module" crossorigin src="/plasmid_network/assets/index-t7cDHfG5.js"></script>
+    <link rel="stylesheet" crossorigin href="/plasmid_network/assets/index-D3C_izFd.css">
   </head>
   <body>
     <div id="root"></div>
