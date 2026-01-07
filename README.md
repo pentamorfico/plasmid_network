@@ -1,4 +1,4 @@
-# Plasmid Network Viewer
+# Plasmid Defense Network
 
 An interactive web application for exploring the global plasmidome and visualizing the distribution of defense systems, antimicrobial resistance (AMR) genes, and anti-defense systems across bacterial plasmids.
 
