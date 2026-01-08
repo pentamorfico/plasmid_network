@@ -45,9 +45,18 @@ type PlasmidData = {
 const REMOTE_BASE =
   "https://raw.githubusercontent.com/pentamorfico/plsdb_imgpr_json/refs/heads/master/"
 const MIN_RADIUS = 110
-const TRACK_HEIGHT = 18
-const REGION_TRACK_OFFSET = 12
+const BASE_TRACK_HEIGHT = 1
+const REGION_TRACK_OFFSET = 2
 const REGION_TRACK_HEIGHT = 10
+
+
+function getTrackHeight(radius: number): number {
+  
+  const scaleFactor = radius / 200 
+  const scaledHeight = BASE_TRACK_HEIGHT * scaleFactor
+  
+  return Math.max(6, Math.min(18, scaledHeight))
+}
 
 function buildRemoteUrl(plasmidId: string) {
   const trimmed = plasmidId.trim()
@@ -288,7 +297,7 @@ export function PlasmidView({
   const gContentRef = React.useRef<SVGGElement | null>(null)
   const tooltipRef = React.useRef<HTMLDivElement | null>(null)
   const zoomRef = React.useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null)
-  const transformRef = React.useRef(d3.zoomIdentity.translate(0, 0).scale(1))
+  const transformRef = React.useRef(d3.zoomIdentity.translate(0, 0).scale(0.7))
   const dimensionsRef = React.useRef({ width: 360, height: 360 })
   const radiusRef = React.useRef<number>(MIN_RADIUS)
   const dataRef = React.useRef<PlasmidData | null>(null)
@@ -320,11 +329,11 @@ export function PlasmidView({
       const group = gContentRef.current ? d3.select(gContentRef.current) : null
       if (!group) return
 
-      // Ensure the group is centered even if the zoom event hasn't fired yet
+      
       const { width, height } = dimensionsRef.current
       const currentTransform =
         transformRef.current ??
-        d3.zoomIdentity.translate(width / 2, height / 2).scale(1)
+        d3.zoomIdentity.translate(width / 2, height / 2).scale(0.7)
       transformRef.current = currentTransform
       if (gContentRef.current) {
         d3.select(gContentRef.current).attr(
@@ -344,6 +353,8 @@ export function PlasmidView({
       )
       radiusRef.current = radius
       const rActual = radius * zoomK
+      
+      const trackHeight = getTrackHeight(rActual)
 
       if (plasmid.gcPoints.length > 0 && gcVisibleRef.current) {
         drawGcTrack(group, scale, rActual, plasmid.gcPoints, plasmid.avgGc)
@@ -354,10 +365,10 @@ export function PlasmidView({
         .attr("r", rActual)
         .attr("fill", "none")
         .attr("stroke", "#e2e8f0")
-        .attr("stroke-width", TRACK_HEIGHT * 2.1)
+        .attr("stroke-width", trackHeight * 2.1)
         .attr("opacity", 0.6)
 
-      drawRuler(group, scale, rActual + TRACK_HEIGHT + 10, zoomK)
+      drawRuler(group, scale, rActual + trackHeight + 10, zoomK)
 
       const cds = plasmid.features.filter((f) => f.type === "CDS")
       const regions = plasmid.features.filter((f) => f.type !== "CDS")
@@ -369,8 +380,8 @@ export function PlasmidView({
         .append("path")
         .attr("class", "feature-path")
         .attr("d", (d) => {
-          const rIn = d.strand === 1 ? rActual : rActual - TRACK_HEIGHT
-          const rOut = d.strand === 1 ? rActual + TRACK_HEIGHT : rActual
+          const rIn = d.strand === 1 ? rActual : rActual - trackHeight
+          const rOut = d.strand === 1 ? rActual + trackHeight : rActual
           return arrowPath(d, scale, rIn, rOut)
         })
         .attr("fill", (d) => getColor(plasmid.legend, d.legend))
@@ -387,7 +398,7 @@ export function PlasmidView({
           hideTooltip()
         })
 
-      const rIn = rActual + TRACK_HEIGHT + REGION_TRACK_OFFSET
+      const rIn = rActual + trackHeight + REGION_TRACK_OFFSET
       const rOut = rIn + REGION_TRACK_HEIGHT
       const arc = d3
         .arc<Feature>()
@@ -464,7 +475,7 @@ export function PlasmidView({
     }
   }, [data, status, drawPlasmid, hideTooltip])
 
-  // Force redraw when toggling GC track visibility
+  
   React.useEffect(() => {
     gcVisibleRef.current = gcVisible
     if (status !== "ready") return
@@ -516,7 +527,7 @@ export function PlasmidView({
       dimensionsRef.current = { width, height }
       d3.select(svgRef.current).attr("viewBox", `0 0 ${width} ${height}`)
       if (zoomRef.current && svgRef.current) {
-        const initialTransform = d3.zoomIdentity.translate(width / 2, height / 2).scale(1)
+        const initialTransform = d3.zoomIdentity.translate(width / 2, height / 2).scale(0.7)
         d3.select(svgRef.current).call(zoomRef.current.transform as any, initialTransform as any)
         transformRef.current = initialTransform
       }
@@ -577,7 +588,7 @@ export function PlasmidView({
   const resetZoom = React.useCallback(() => {
     if (!svgRef.current || !zoomRef.current) return
     const { width, height } = dimensionsRef.current
-    const initialTransform = d3.zoomIdentity.translate(width / 2, height / 2).scale(1)
+    const initialTransform = d3.zoomIdentity.translate(width / 2, height / 2).scale(0.7)
     d3.select(svgRef.current)
       .transition()
       .duration(350)

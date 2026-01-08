@@ -171,8 +171,12 @@ function SidebarToggleFab({
 function App() {
   const [showLinks, setShowLinks] = React.useState(true)
   const [showLabels, setShowLabels] = React.useState(true)
+  const [labelType, setLabelType] = React.useState<'points' | 'clusters'>('clusters')
   const [colorBy, setColorBy] = React.useState<string>("")
   const [colorOptions, setColorOptions] = React.useState<string[]>([])
+  const [columnDisplayNames, setColumnDisplayNames] = React.useState<Record<string, string>>({})
+  const [columnCategories, setColumnCategories] = React.useState<Record<string, string[]>>({})
+  const [numericColumns, setNumericColumns] = React.useState<Set<string>>(new Set())
   const [pointSize, setPointSize] = React.useState<number>(10)
   const [linkOpacity, setLinkOpacity] = React.useState<number>(0.15)
   const [pointGreyoutOpacity, setPointGreyoutOpacity] = React.useState<number>(0.01)
@@ -227,10 +231,10 @@ function App() {
 
   const [, startTransition] = React.useTransition()
 
-  // Ref para rastrear si había selección (para detectar deselección real)
+  
   const hadSelectionRef = React.useRef(false)
   
-  // Actualizar ref cuando cambia selectedRowIndices
+  
   React.useEffect(() => {
     hadSelectionRef.current = selectedRowIndices.length > 0
   }, [selectedRowIndices])
@@ -239,7 +243,7 @@ function App() {
     (rows: number[]) => {
       const next = normalizeSelection(rows)
       
-      // Deselección completa - solo resetear toggle si REALMENTE teníamos selección antes
+      
       if (next.length === 0) {
         if (hadSelectionRef.current) {
           setShowOnlySelectedRows(false)
@@ -250,7 +254,7 @@ function App() {
         return
       }
       
-      // Selección - NO tocar showOnlySelectedRows (el usuario lo controla)
+      
       startTransition(() => {
         setSelectedRowIndices((prev) => (rowsEqual(prev, next) ? prev : next))
       })
@@ -258,19 +262,19 @@ function App() {
     [normalizeSelection, rowsEqual]
   )
 
-  // Handler combinado para selecciones grandes (leyenda, polígono)
-  // Esto asegura que showOnlySelectedRows se setee DESPUÉS de selectedRowIndices
+  
+  
   const handleLargeSelection = React.useCallback(
     (rows: number[]) => {
       const next = normalizeSelection(rows)
       
-      // Actualizar selección primero (inmediato para selecciones nuevas)
+      
       if (next.length > 0) {
         setSelectedRowIndices((prev) => (rowsEqual(prev, next) ? prev : next))
         setShowOnlySelectedRows(true)
       } else {
-        // Deselección - limpiar selección pero NO tocar el toggle
-        // El toggle se controla manualmente por el usuario
+        
+        
         setSelectedRowIndices([])
       }
       setPrimarySelectedIndex(null)
@@ -298,8 +302,13 @@ function App() {
         onToggleLinks={setShowLinks}
         showLabels={showLabels}
         onToggleLabels={setShowLabels}
+        labelType={labelType}
+        onChangeLabelType={setLabelType}
         colorBy={colorBy}
         colorOptions={colorOptions}
+        columnDisplayNames={columnDisplayNames}
+        columnCategories={columnCategories}
+        numericColumns={numericColumns}
         onChangeColorBy={(v) => setColorBy(v ?? "")}
         pointSize={pointSize}
         onChangePointSize={setPointSize}
@@ -332,6 +341,7 @@ function App() {
               <NetworkCosmograph
                 showLinks={showLinks}
                 showLabels={showLabels}
+                labelType={labelType}
                 colorBy={colorBy}
                 pointSize={pointSize}
                 linkOpacity={linkOpacity}
@@ -345,6 +355,9 @@ function App() {
                     prev && prev.length > 0 ? prev : value ?? ""
                   )
                 }
+                onColumnDisplayNames={(names) => setColumnDisplayNames(names)}
+                onColumnCategories={(categories) => setColumnCategories(categories)}
+                onNumericColumns={(cols) => setNumericColumns(cols)}
                 selectedPointIndices={selectedRowIndices}
                 onPointSelected={(index) => {
                   if (index === null || index === undefined || Number.isNaN(index)) {
@@ -353,12 +366,9 @@ function App() {
                     return
                   }
                   if (!Number.isInteger(index) || index < 0) return
-                  // Siempre incrementar trigger para forzar scroll, incluso si es el mismo índice
                   setFocusedRowIndex(index)
                   setFocusTrigger(prev => prev + 1)
                   setPrimarySelectedIndex(index)
-                  // NO abrir la tabla automáticamente al hacer click en un punto
-                  // El usuario puede abrirla manualmente con el botón
                 }}
                 onSelectionChange={handleSelectionChange}
                 polygonSelectionActive={polygonSelectionActive}
@@ -377,7 +387,7 @@ function App() {
                   setPolygonSelectionActive(false)
                   setShowOnlySelectedRows(false)
                   setLoadMessage("Preparing interface")
-                  // El índice de búsqueda ahora es lazy, no bloqueamos la carga
+                  
                   setIndexReady(true)
                   setGraphReady(true)
                 }}

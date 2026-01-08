@@ -179,6 +179,7 @@ body,
   backdrop-filter: blur(6px);
 }
 
+
 .plasmid-tooltip__title {
   font-weight: 600;
   font-size: 0.75rem;
@@ -257,4 +258,60 @@ body,
 
 .gdg-wrapper ::-webkit-scrollbar-thumb:hover {
   background: var(--muted-foreground);
+}
+
+/* ==========================================================
+   COSMOGRAPH LEGEND
+   ========================================================== */
+
+.cosmograph-legend {
+  position: absolute;
+  bottom: 1rem;
+  left: 1rem;
+  width: 200px;
+  min-width: 200px;
+  display: flex;
+  gap: 10px;
+  flex-direction: column;
+  pointer-events: auto;
+  z-index: 10;
+  transition: width 0.2s ease;
+}
+
+/* Override internal Cosmograph legend widths */
+.cosmograph-legend [class*="style_module_wrapper"],
+.cosmograph-legend [class*="style_module_typeLegend"],
+.cosmograph-legend [class*="style_module_container"],
+.cosmograph-legend [class*="scroll-container"] {
+  width: 100% !important;
+  max-width: none !important;
+}
+
+/* Override legend item widths */
+.cosmograph-legend [class*="style_module_legend"] {
+  width: 100% !important;
+  max-width: none !important;
+}
+
+/* Add spacing for scrollbar */
+.cosmograph-legend [class*="scroll-container"] {
+  padding-right: 8px !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+}
+
+/* Allow legend items to take natural width - keep position absolute for virtualization */
+.cosmograph-legend [class*="legend-item"] {
+  width: 100% !important;
+  max-width: none !important;
+}
+
+/* Allow labels to expand without cutting */
+.cosmograph-legend [class*="label"] {
+  overflow: visible !important;
+  text-overflow: clip !important;
+  white-space: nowrap !important;
+  max-width: none !important;
+  width: auto !important;
+  display: inline-block !important;
 }

@@ -137,14 +137,20 @@ import { Switch } from "@/components/ui/switch"
 import { Slider } from "@/components/ui/slider"
 import { Card, CardContent } from "@/components/ui/card"
 import { PlasmidView } from "@/components/plasmid-view"
+import { Badge } from "@/components/ui/badge"
 
 type ControlProps = {
   showLinks: boolean
   onToggleLinks: (value: boolean) => void
   showLabels: boolean
   onToggleLabels: (value: boolean) => void
+  labelType: 'points' | 'clusters'
+  onChangeLabelType: (value: 'points' | 'clusters') => void
   colorBy?: string
   colorOptions: string[]
+  columnDisplayNames: Record<string, string>
+  columnCategories: Record<string, string[]>
+  numericColumns: Set<string>
   onChangeColorBy: (value?: string) => void
   pointSize: number
   onChangePointSize: (value: number) => void
@@ -166,8 +172,13 @@ export function AppSidebar({
   onToggleLinks,
   showLabels,
   onToggleLabels,
+  labelType,
+  onChangeLabelType,
   colorBy,
   colorOptions,
+  columnDisplayNames,
+  columnCategories,
+  numericColumns,
   onChangeColorBy,
   pointSize,
   onChangePointSize,
@@ -184,6 +195,21 @@ export function AppSidebar({
   plasmidId,
   ...props
 }: React.ComponentProps<typeof Sidebar> & ControlProps) {
+  const categoryColors: Record<string, string> = {
+    plasmid: "bg-purple-500/20 text-purple-700 dark:text-purple-300",
+    mobility: "bg-blue-500/20 text-blue-700 dark:text-blue-300",
+    defense: "bg-green-500/20 text-green-700 dark:text-green-300",
+    "PDC": "bg-teal-500/20 text-teal-700 dark:text-teal-300",
+    "anti-defense": "bg-orange-500/20 text-orange-700 dark:text-orange-300",
+    "AMR": "bg-red-500/20 text-red-700 dark:text-red-300",
+    "MGE": "bg-pink-500/20 text-pink-700 dark:text-pink-300",
+    host: "bg-cyan-500/20 text-cyan-700 dark:text-cyan-300",
+    taxonomy: "bg-sky-500/20 text-sky-700 dark:text-sky-300",
+    ecosystem: "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300",
+    network: "bg-indigo-500/20 text-indigo-700 dark:text-indigo-300",
+    metadata: "bg-gray-500/20 text-gray-700 dark:text-gray-300",
+  }
+  
   return (
     <Sidebar collapsible="offcanvas" {...props}>
       <SidebarHeader className="px-4 pt-5">
@@ -223,12 +249,31 @@ export function AppSidebar({
                       className="text-[0.6rem]"
                     />
                   </SelectTrigger>
-                  <SelectContent>
-                    {colorOptions.map((opt) => (
-                      <SelectItem key={opt} value={opt}>
-                        {opt}
-                      </SelectItem>
-                    ))}
+                  <SelectContent className="min-w-[400px]">
+                    {colorOptions.map((opt) => {
+                      const categories = columnCategories[opt] || []
+                      const isNumeric = numericColumns.has(opt)
+                      return (
+                        <SelectItem key={opt} value={opt} className="pr-8 cursor-pointer">
+                          <div className="flex items-center justify-between w-full gap-2">
+                            <span className="truncate flex-1 min-w-0">{columnDisplayNames[opt] || opt}</span>
+                            <div className="flex items-center gap-1 shrink-0">
+                              {categories.length > 0 && categories.map((category) => {
+                                const categoryColor = categoryColors[category] || ""
+                                return (
+                                  <span key={category} className={`px-1.5 py-0.5 text-[0.6rem] rounded-md font-medium whitespace-nowrap ${categoryColor}`}>
+                                    {category}
+                                  </span>
+                                )
+                              })}
+                              <span className={`flex items-center justify-center px-1 h-4 text-[0.5rem] font-bold rounded bg-foreground/15 text-foreground/60`}>
+                                {isNumeric ? '123' : 'ABC'}
+                              </span>
+                            </div>
+                          </div>
+                        </SelectItem>
+                      )
+                    })}
                   </SelectContent>
                 </Select>
               </div>
@@ -257,7 +302,7 @@ export function AppSidebar({
                       Show labels
                     </div>
                     <p className="text-[0.6rem] text-muted-foreground">
-                      Display node identifiers
+                      Toggle label visibility
                     </p>
                   </div>
                   <Switch
@@ -265,6 +310,27 @@ export function AppSidebar({
                     checked={showLabels}
                     onCheckedChange={(v) => onToggleLabels(v)}
                   />
+                </div>
+                <div className="flex items-center justify-between rounded-lg border px-3 py-2">
+                  <div className="text-[0.64rem] font-semibold tracking-wide uppercase">
+                    Label type
+                  </div>
+                  <div className="flex gap-2">
+                    <Badge 
+                      variant={labelType === 'points' ? 'default' : 'outline'}
+                      className="cursor-pointer px-3 py-1 text-[0.68rem] hover:opacity-80 transition-opacity"
+                      onClick={() => onChangeLabelType('points')}
+                    >
+                      Node IDs
+                    </Badge>
+                    <Badge 
+                      variant={labelType === 'clusters' ? 'default' : 'outline'}
+                      className="cursor-pointer px-3 py-1 text-[0.68rem] hover:opacity-80 transition-opacity"
+                      onClick={() => onChangeLabelType('clusters')}
+                    >
+                      PTUs
+                    </Badge>
+                  </div>
                 </div>
             <div className="space-y-2 rounded-lg border px-3 py-2">
               <div className="flex items-center justify-between">

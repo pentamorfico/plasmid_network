@@ -18,7 +18,7 @@
  */
 
 import { Database } from 'duckdb-async';
-import { writeFile } from 'fs/promises';
+import { readFile, writeFile } from 'fs/promises';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
@@ -56,14 +56,122 @@ async function main() {
   const totalNodes = await db.all(`SELECT COUNT(*) as cnt FROM '${INPUT_NODES}'`);
   console.log(`   Total nodes in file: ${Number(totalNodes[0].cnt).toLocaleString()}`);
 
-  // Load nodes with limit and add idx
+  // Load nodes with limit
   const limitClause = MAX_NODES ? `LIMIT ${MAX_NODES}` : '';
   await db.run(`
-    CREATE TABLE nodes AS
-    SELECT *, ROW_NUMBER() OVER () - 1 AS idx
+    CREATE TABLE nodes_raw AS
+    SELECT *
     FROM '${INPUT_NODES}'
+    WHERE domain != 'Eukaryota'
     ${limitClause}
   `);
+  
+  // Apply transformations and add log columns
+  console.log('   Applying data transformations...');
+  
+  // First, normalize empty/null values across all string columns
+  console.log('   Normalizing empty values (-, nan, null, etc.)...');
+  const rawColumnsInfo = await db.all('DESCRIBE nodes_raw');
+  const columnsToNormalize = rawColumnsInfo.filter(c => 
+    c.column_type === 'VARCHAR' || c.column_type.includes('VARCHAR')
+  ).map(c => c.column_name);
+  
+  const normalizedSelects = rawColumnsInfo.map(col => {
+    const colName = col.column_name;
+    if (columnsToNormalize.includes(colName)) {
+      // Normalize empty values to empty string for string columns
+      return `CASE 
+        WHEN "${colName}" IN ('-', 'nan', 'NaN', 'null', 'NULL', 'NA', 'N/A', 'None', '') THEN ''
+        WHEN TRIM("${colName}") = '' THEN ''
+        ELSE "${colName}"
+      END AS "${colName}"`;
+    }
+    return `"${colName}"`;
+  }).join(',\n      ');
+  
+  await db.run(`CREATE TABLE nodes_clean AS SELECT ${normalizedSelects} FROM nodes_raw`);
+  await db.run(`DROP TABLE nodes_raw`);
+  await db.run(`ALTER TABLE nodes_clean RENAME TO nodes_raw`);
+  
+  // Get existing columns to know which ones to exclude
+  const rawColumns = await db.all('DESCRIBE nodes_raw');
+  const existingCols = new Set(rawColumns.map(c => c.column_name));
+  
+  // Build EXCLUDE list for columns we want to recreate or don't want at all
+  const excludeCols = [
+    'topology', 'putative_phage_plasmid',  // Replace with normalized versions
+    'num_def_sys_host', 'num_Anti_sys_host',
+    'log2_length', 'log10_length',
+    'log2_total_chromosome_length_host', 'log10_total_chromosome_length_host',
+    'log2_PCN', 'log10_PCN',
+    'log2_num_def_sys', 'log10_num_def_sys',
+    'log2_num_PDC_sys', 'log10_num_PDC_sys',
+    'log2_num_Anti_sys', 'log10_num_Anti_sys',
+    'log2_num_amr', 'log10_num_amr',
+    'log2_num_plasmids', 'log10_num_plasmids',
+    'log2_num_def_sys_host', 'log10_num_def_sys_host',
+    'log2_num_Anti_sys_host', 'log10_num_Anti_sys_host',
+    'log2_avg_dice_similarity', 'log10_avg_dice_similarity',
+    // Exclude unwanted binary columns (specific mpf, relaxase, orit variants)
+    'mpf_MPF_F', 'mpf_MPF_G', 'mpf_MPF_I', 'mpf_MPF_T',
+    'relaxase_MOBB', 'relaxase_MOBC', 'relaxase_MOBF', 'relaxase_MOBH', 'relaxase_MOBM', 'relaxase_MOBP', 'relaxase_MOBQ', 'relaxase_MOBT', 'relaxase_MOBV',
+    'orit_MOBB', 'orit_MOBC', 'orit_MOBF', 'orit_MOBH', 'orit_MOBP', 'orit_MOBQ', 'orit_MOBV',
+    // Exclude technical/internal columns that shouldn't be visible
+    'ecosystem', 'Ecosystem_1', 'Member', 'PTU_sHSBM (10)', 'cluster', 'depth', 'is_representative',
+    // Exclude metadata columns
+    'sample_id', 'Representative'
+  ].filter(col => existingCols.has(col));
+  
+  const excludeClause = excludeCols.length > 0 ? `EXCLUDE (${excludeCols.map(col => `"${col}"`).join(', ')})` : '';
+  
+  await db.run(`
+    CREATE TABLE nodes AS
+    SELECT 
+      * ${excludeClause},
+      ROW_NUMBER() OVER () - 1 AS idx,
+      -- Convert string host columns to numeric
+      TRY_CAST(num_def_sys_host AS DOUBLE) AS num_def_sys_host,
+      TRY_CAST(num_Anti_sys_host AS DOUBLE) AS num_Anti_sys_host,
+      -- Normalize topology
+      CASE 
+        WHEN LOWER(topology) = 'linear' THEN 'Linear'
+        WHEN LOWER(topology) = 'circular' THEN 'Circular'
+        WHEN topology IS NULL OR LOWER(topology) = 'not-set' THEN 'Unknown'
+        ELSE topology
+      END AS topology_normalized,
+      -- Normalize putative_phage_plasmid to TRUE/FALSE (original values are Yes/No)
+      CASE 
+        WHEN LOWER(putative_phage_plasmid) IN ('yes', 'true', '1') THEN 'TRUE'
+        WHEN LOWER(putative_phage_plasmid) IN ('no', 'false', '0') THEN 'FALSE'
+        ELSE 'FALSE'
+      END AS putative_phage_plasmid_normalized,
+      -- Add log-transformed columns for ALL numeric columns (both log2 and log10)
+      CASE WHEN length > 0 THEN LOG2(length) ELSE NULL END AS log2_length,
+      CASE WHEN length > 0 THEN LOG10(length) ELSE NULL END AS log10_length,
+      CASE WHEN total_chromosome_length_host > 0 THEN LOG2(total_chromosome_length_host) ELSE NULL END AS log2_total_chromosome_length_host,
+      CASE WHEN total_chromosome_length_host > 0 THEN LOG10(total_chromosome_length_host) ELSE NULL END AS log10_total_chromosome_length_host,
+      CASE WHEN PCN > 0 THEN LOG2(PCN) ELSE NULL END AS log2_PCN,
+      CASE WHEN PCN > 0 THEN LOG10(PCN) ELSE NULL END AS log10_PCN,
+      CASE WHEN num_def_sys > 0 THEN LOG2(num_def_sys) ELSE NULL END AS log2_num_def_sys,
+      CASE WHEN num_def_sys > 0 THEN LOG10(num_def_sys) ELSE NULL END AS log10_num_def_sys,
+      CASE WHEN num_PDC_sys > 0 THEN LOG2(num_PDC_sys) ELSE NULL END AS log2_num_PDC_sys,
+      CASE WHEN num_PDC_sys > 0 THEN LOG10(num_PDC_sys) ELSE NULL END AS log10_num_PDC_sys,
+      CASE WHEN num_Anti_sys > 0 THEN LOG2(num_Anti_sys) ELSE NULL END AS log2_num_Anti_sys,
+      CASE WHEN num_Anti_sys > 0 THEN LOG10(num_Anti_sys) ELSE NULL END AS log10_num_Anti_sys,
+      CASE WHEN num_amr > 0 THEN LOG2(num_amr) ELSE NULL END AS log2_num_amr,
+      CASE WHEN num_amr > 0 THEN LOG10(num_amr) ELSE NULL END AS log10_num_amr,
+      CASE WHEN num_plasmids > 0 THEN LOG2(num_plasmids) ELSE NULL END AS log2_num_plasmids,
+      CASE WHEN num_plasmids > 0 THEN LOG10(num_plasmids) ELSE NULL END AS log10_num_plasmids,
+      CASE WHEN TRY_CAST(num_def_sys_host AS DOUBLE) > 0 THEN LOG2(TRY_CAST(num_def_sys_host AS DOUBLE)) ELSE NULL END AS log2_num_def_sys_host,
+      CASE WHEN TRY_CAST(num_def_sys_host AS DOUBLE) > 0 THEN LOG10(TRY_CAST(num_def_sys_host AS DOUBLE)) ELSE NULL END AS log10_num_def_sys_host,
+      CASE WHEN TRY_CAST(num_Anti_sys_host AS DOUBLE) > 0 THEN LOG2(TRY_CAST(num_Anti_sys_host AS DOUBLE)) ELSE NULL END AS log2_num_Anti_sys_host,
+      CASE WHEN TRY_CAST(num_Anti_sys_host AS DOUBLE) > 0 THEN LOG10(TRY_CAST(num_Anti_sys_host AS DOUBLE)) ELSE NULL END AS log10_num_Anti_sys_host,
+      CASE WHEN avg_dice_similarity > 0 THEN LOG2(avg_dice_similarity) ELSE NULL END AS log2_avg_dice_similarity,
+      CASE WHEN avg_dice_similarity > 0 THEN LOG10(avg_dice_similarity) ELSE NULL END AS log10_avg_dice_similarity
+    FROM nodes_raw
+  `);
+  
+  await db.run('DROP TABLE nodes_raw');
 
   const nodeCount = await db.all('SELECT COUNT(*) as cnt FROM nodes');
   const numNodes = Number(nodeCount[0].cnt);
@@ -138,14 +246,47 @@ async function main() {
   console.log();
 
   // ========================================
-  // Step 3: Save prepared data
+  // Step 3: Load column display names and rename columns
+  // ========================================
+  console.log('📖 Loading column display names...');
+  
+  let columnDisplayNames = {};
+  try {
+    const configData = await readFile(OUTPUT_CONFIG, 'utf-8');
+    const config = JSON.parse(configData);
+    columnDisplayNames = config.columnDisplayNames || {};
+    console.log(`   Found ${Object.keys(columnDisplayNames).length} display names`);
+  } catch (err) {
+    console.log('   No existing config found, using original column names');
+  }
+
+  // Build SELECT with renamed columns
+  const allNodeColumns = await db.all('DESCRIBE nodes');
+  const renamedSelects = allNodeColumns.map(col => {
+    const colName = col.column_name;
+    const displayName = columnDisplayNames[colName];
+    
+    if (displayName && displayName !== colName) {
+      // Always escape both names for safety
+      return `"${colName}" AS "${displayName}"`;
+    }
+    
+    // Keep original name but always escape for safety
+    return `"${colName}"`;
+  }).join(', ');
+
+  console.log('🔄 Renaming columns...');
+  await db.run(`CREATE TABLE nodes_renamed AS SELECT ${renamedSelects} FROM nodes`);
+
+  // ========================================
+  // Step 4: Save prepared data
   // ========================================
   console.log('💾 Saving prepared data...');
 
-  // Save nodes
-  await db.run(`COPY nodes TO '${OUTPUT_NODES}' (FORMAT PARQUET)`);
+  // Save nodes with renamed columns
+  await db.run(`COPY nodes_renamed TO '${OUTPUT_NODES}' (FORMAT PARQUET)`);
   console.log(`   ✅ Nodes saved to: ${OUTPUT_NODES}`);
-  console.log(`      Rows: ${numNodes.toLocaleString()}, Columns: ${nodeColNames.length + 1}`);
+  console.log(`      Rows: ${numNodes.toLocaleString()}, Columns: ${allNodeColumns.length}`);
 
   // Save edges
   await db.run(`COPY edges TO '${OUTPUT_EDGES}' (FORMAT PARQUET)`);
@@ -154,53 +295,70 @@ async function main() {
   console.log();
 
   // ========================================
-  // Step 4: Create configuration JSON
+  // Step 5: Update configuration JSON with renamed columns
   // ========================================
-  console.log('📝 Creating configuration JSON...');
+  console.log('📝 Updating configuration JSON...');
 
-  // Detect all columns to include (exclude coordinate and index columns)
-  const excludeCols = new Set(['id', 'idx', 'x', 'y', 'source', 'target', 'sourceidx', 'targetidx', 'weight']);
-  const includeColumns = nodeColNames.filter(col => !excludeCols.has(col));
+  // Create mapping: originalName -> displayName
+  const nameMapping = {};
+  for (const [original, display] of Object.entries(columnDisplayNames)) {
+    nameMapping[original] = display;
+  }
 
-  const config = {
-    pointIdBy: 'id',
-    pointIndexBy: 'idx',
-    pointXBy: 'x',
-    pointYBy: 'y',
-    pointColorBy: 'Ecosystem_category',
-    pointSizeBy: 'length',
-    pointIncludeColumns: includeColumns,
-    linkSourceBy: 'source',
-    linkTargetBy: 'target',
-    linkSourceIndexBy: 'sourceidx',
-    linkTargetIndexBy: 'targetidx',
-    linkWidthBy: 'weight'
+  // Helper to rename a column name
+  const renameColumn = (col) => nameMapping[col] || col;
+
+  // Read existing config
+  let existingConfig = {};
+  try {
+    const configData = await readFile(OUTPUT_CONFIG, 'utf-8');
+    existingConfig = JSON.parse(configData);
+  } catch (err) {
+    console.log('   No existing config to update');
+  }
+
+  // Update all arrays and objects with renamed columns
+  const updatedConfig = {
+    ...existingConfig,
+    pointIncludeColumns: existingConfig.pointIncludeColumns?.map(renameColumn),
+    numericColumns: existingConfig.numericColumns?.map(renameColumn),
+    pointExcludeFromColorBy: existingConfig.pointExcludeFromColorBy?.map(renameColumn),
+    
+    // Update logColumnMapping
+    logColumnMapping: Object.entries(existingConfig.logColumnMapping || {}).reduce((acc, [key, value]) => {
+      acc[renameColumn(key)] = {
+        log2: value.log2 ? renameColumn(value.log2) : value.log2,
+        log10: value.log10 ? renameColumn(value.log10) : value.log10,
+      };
+      return acc;
+    }, {}),
+    
+    // Update columnCategories
+    columnCategories: Object.entries(existingConfig.columnCategories || {}).reduce((acc, [key, value]) => {
+      acc[renameColumn(key)] = value;
+      return acc;
+    }, {}),
   };
 
-  await writeFile(OUTPUT_CONFIG, JSON.stringify(config, null, 2));
+  // Keep columnDisplayNames for future runs (needed for the renaming process)
+  // Don't delete it: we need it to map technical names to display names
+  // delete updatedConfig.columnDisplayNames;
 
-  console.log(`   ✅ Config saved to: ${OUTPUT_CONFIG}`);
-  console.log(`      Including ${includeColumns.length} additional columns`);
+  await writeFile(OUTPUT_CONFIG, JSON.stringify(updatedConfig, null, 2));
+  console.log(`   ✅ Config updated: ${OUTPUT_CONFIG}`);
   console.log();
 
   // ========================================
-  // Summary
+  // Step 6: Summary
   // ========================================
   console.log('='.repeat(60));
   console.log('✨ Preparation complete!');
   console.log('='.repeat(60));
   console.log('📊 Summary:');
-  console.log(`   Points: ${numNodes.toLocaleString()} nodes with ${nodeColNames.length + 1} columns`);
+  console.log(`   Points: ${numNodes.toLocaleString()} nodes with ${allNodeColumns.length} columns`);
   console.log(`   Links:  ${numFinalEdges.toLocaleString()} edges with ${finalEdgeColNames.length} columns`);
   console.log(`   Config: ${OUTPUT_CONFIG}`);
-  console.log();
-  console.log('📋 Included columns:');
-  for (const col of includeColumns.slice(0, 20)) {
-    console.log(`   • ${col}`);
-  }
-  if (includeColumns.length > 20) {
-    console.log(`   ... and ${includeColumns.length - 20} more`);
-  }
+  console.log(`   Renamed: ${Object.keys(columnDisplayNames).length} columns`);
 
   await db.close();
 }

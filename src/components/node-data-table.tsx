@@ -50,33 +50,33 @@ export function NodeDataTable({
   const { resolvedTheme } = useTheme()
   const isDark = (resolvedTheme ?? "dark") === "dark"
 
-  // Diferir la selección para no bloquear el UI
+  
   const deferredSelectedRowIndices = React.useDeferredValue(selectedRowIndices)
   
-  // Lógica para elegir qué valor usar:
-  // - Deselección (length === 0): usar valor inmediato para respuesta instantánea
-  // - Primera selección (deferred vacío pero actual tiene datos): usar valor inmediato
-  // - Selección en curso (ambos tienen datos): usar deferred para no bloquear
+  
+  
+  
+  
   const effectiveSelectedRowIndices = React.useMemo(() => {
-    // Deselección inmediata
+    
     if (!selectedRowIndices || selectedRowIndices.length === 0) {
       return selectedRowIndices
     }
-    // Primera selección (deferred aún no tiene datos)
+    
     if (!deferredSelectedRowIndices || deferredSelectedRowIndices.length === 0) {
       return selectedRowIndices
     }
-    // Selección en curso - usar deferred para no bloquear
+    
     return deferredSelectedRowIndices
   }, [selectedRowIndices, deferredSelectedRowIndices])
 
-  // Estado local para la selección del grid (modo controlado simple)
+  
   const [gridSelection, setGridSelection] = React.useState<GridSelection>({
     columns: CompactSelection.empty(),
     rows: CompactSelection.empty(),
   })
   
-  // Ref para evitar reportar cambios que vienen de sincronización externa
+  
   const syncingFromExternalRef = React.useRef(false)
 
   const gridRef = React.useRef<DataEditorRef | null>(null)
@@ -99,14 +99,14 @@ export function NodeDataTable({
   const [isIndexing, setIsIndexing] = React.useState(false)
   const indexingTriggeredRef = React.useRef(false)
 
-  // Columnas prioritarias para indexar (más útiles para búsqueda)
+  
   const searchableColumns = React.useMemo(() => {
     const priority = ['id', 'species', 'genus', 'family', 'order', 'class', 'phylum', 'domain', 
                       'Ecosystem', 'topology', 'predicted_mobility', 'cluster']
     return columns.filter(col => priority.includes(col))
   }, [columns])
 
-  // Lazy search index - solo se construye cuando el usuario escribe algo
+  
   const buildSearchIndex = React.useCallback(() => {
     if (indexingTriggeredRef.current || !dataSource || columns.length === 0) return
     indexingTriggeredRef.current = true
@@ -154,21 +154,21 @@ export function NodeDataTable({
     runBatch(0)
   }, [dataSource, columns, columnVectors, totalRows, searchableColumns])
 
-  // Resetear cuando cambian los datos
+  
   React.useEffect(() => {
     indexingTriggeredRef.current = false
     setSearchIndex(null)
     setIsIndexing(false)
   }, [dataSource, columns])
 
-  // Notificar que estamos listos (ya no esperamos el índice)
+  
   React.useEffect(() => {
     if (dataSource && columns.length > 0) {
       onIndexReady?.()
     }
   }, [dataSource, columns, onIndexReady])
 
-  // Disparar construcción del índice cuando el usuario empieza a escribir
+  
   React.useEffect(() => {
     if (searchValue && searchValue.length > 0 && !searchIndex && !isIndexing) {
       buildSearchIndex()
@@ -177,7 +177,7 @@ export function NodeDataTable({
 
   const searchFilteredRows = React.useMemo(() => {
     if (!searchValue) return null
-    if (!searchIndex) return null // Aún construyendo índice
+    if (!searchIndex) return null 
     const needle = searchValue.toLowerCase()
     const matches: number[] = []
     for (let i = 0; i < searchIndex.length; i++) {
@@ -188,8 +188,8 @@ export function NodeDataTable({
     return matches
   }, [searchValue, searchIndex])
 
-  // Set para lookup O(1) de selección - SIEMPRE disponible para highlighting
-  // Usa effectiveSelectedRowIndices para responder inmediatamente a deselección
+  
+  
   const selectedRowSet = React.useMemo(() => {
     if (!effectiveSelectedRowIndices || effectiveSelectedRowIndices.length === 0) return null
     const set = new Set<number>()
@@ -201,7 +201,7 @@ export function NodeDataTable({
     return set.size > 0 ? set : null
   }, [effectiveSelectedRowIndices, totalRows])
 
-  // Set para filtrar filas (solo cuando showOnlySelected)
+  
   const selectionFilterSet = React.useMemo(() => {
     if (!showOnlySelected) return null
     return selectedRowSet
@@ -252,7 +252,7 @@ export function NodeDataTable({
     return baseTotal
   })()
 
-  // Lookup para convertir índices de fuente a índices visibles
+  
   const filteredRowLookup = React.useMemo(() => {
     if (!filteredRowIndices) return null
     const map = new Map<number, number>()
@@ -262,10 +262,10 @@ export function NodeDataTable({
     return map
   }, [filteredRowIndices])
 
-  // Sincronizar gridSelection cuando la selección viene de Cosmograph (leyenda, polígono)
+  
   React.useEffect(() => {
     if (!effectiveSelectedRowIndices || effectiveSelectedRowIndices.length === 0) {
-      // Limpiar selección
+      
       syncingFromExternalRef.current = true
       setGridSelection({
         columns: CompactSelection.empty(),
@@ -277,14 +277,14 @@ export function NodeDataTable({
       return
     }
 
-    // Convertir índices de fuente a índices visibles
+    
     const visibleSelectedRows: number[] = []
     for (const sourceIdx of effectiveSelectedRowIndices) {
       let visibleIdx: number | undefined
       if (filteredRowLookup && filteredRowLookup.size > 0) {
         visibleIdx = filteredRowLookup.get(sourceIdx)
       } else if (filteredRowIndices === null) {
-        // Sin filtro - el índice visible es el mismo que el de fuente
+        
         visibleIdx = sourceIdx
       }
       if (visibleIdx !== undefined && visibleIdx >= 0 && visibleIdx < visibleRowCount) {
@@ -292,10 +292,10 @@ export function NodeDataTable({
       }
     }
 
-    // Solo actualizar si hay filas visibles seleccionadas
+    
     if (visibleSelectedRows.length > 0) {
       syncingFromExternalRef.current = true
-      // Construir CompactSelection añadiendo cada índice
+      
       let rowsSelection = CompactSelection.empty()
       for (const idx of visibleSelectedRows) {
         rowsSelection = rowsSelection.add(idx)
@@ -397,10 +397,10 @@ export function NodeDataTable({
       const matchesSearch =
         needle.length > 0 && display.toLowerCase().includes(needle)
 
-      // Lookup O(1) para selección visual
+      
       const isSelected = selectedRowSet?.has(sourceRow) ?? false
 
-      // Prioridad: search > selection > default
+      
       let highlightTheme: Partial<Theme> | undefined = undefined
       if (matchesSearch) {
         highlightTheme = {
@@ -428,8 +428,8 @@ export function NodeDataTable({
     [columns, filteredRowIndices, totalRows, searchValue, isDark, getRawValue, selectedRowSet]
   )
 
-  // Key que cambia solo para cambios estructurales (columnas, filas, tema)
-  // NO incluir selección - eso causaría re-mount del grid y perdería scroll
+  
+  
   const editorKey = React.useMemo(
     () => `grid-${columns.length}-${totalRows}-${isDark ? "dark" : "light"}`,
     [columns.length, totalRows, isDark]
@@ -464,22 +464,22 @@ export function NodeDataTable({
     }
   }, [isDark])
 
-  // Referencia para el último focusRowIndex pendiente
+  
   const pendingFocusRef = React.useRef<number | null>(null)
 
-  // Hacer scroll cuando cambia focusTrigger
+  
   React.useEffect(() => {
-    // Ignorar trigger 0 (inicial)
+    
     if (focusTrigger === 0) return
     if (focusRowIndex === null || focusRowIndex === undefined) return
     
     if (!open) {
-      // Guardar para cuando se abra
+      
       pendingFocusRef.current = focusRowIndex
       return
     }
     
-    // Tabla abierta - hacer scroll
+    
     pendingFocusRef.current = null
     const timeoutId = setTimeout(() => {
       const targetRow =
@@ -502,7 +502,7 @@ export function NodeDataTable({
     return () => clearTimeout(timeoutId)
   }, [focusTrigger, focusRowIndex, open, filteredRowIndices])
 
-  // Cuando la tabla se abre, hacer scroll a la fila pendiente
+  
   React.useEffect(() => {
     if (!open) return
     if (pendingFocusRef.current === null) return
@@ -551,18 +551,18 @@ export function NodeDataTable({
 
   const handleGridSelectionChange = React.useCallback(
     (selection: GridSelection) => {
-      // Actualizar estado local del grid primero
+      
       setGridSelection(selection)
       
-      // Si el cambio viene de sincronización externa (Cosmograph), no reportar de vuelta
+      
       if (syncingFromExternalRef.current) return
       
       if (!onRowSelectionChange) return
 
       const selectedVisibleRows = selection.rows.toArray()
       
-      // Si no hay filas seleccionadas en el grid, NO reportar deselección
-      // Esto evita resetear la selección cuando cambia el filtro
+      
+      
       if (selectedVisibleRows.length === 0) {
         return
       }
@@ -723,7 +723,7 @@ export function NodeDataTable({
             searchResults={[]}
             getCellsForSelection={true}
             
-            // Selección controlada
+            
             gridSelection={gridSelection}
             onGridSelectionChange={handleGridSelectionChange}
             rowSelect="multi"

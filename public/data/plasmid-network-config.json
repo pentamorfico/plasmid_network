@@ -3,96 +3,429 @@
   "pointIndexBy": "idx",
   "pointXBy": "x",
   "pointYBy": "y",
-  "pointColorBy": "Ecosystem_category",
-  "pointSizeBy": "length",
+  "pointColorBy": "PTU cluster",
+  "pointLabelBy": "PTU cluster",
+  "pointClusterBy": "PTU cluster",
+  "pointSizeBy": "Plasmid length log10 (bp)",
   "pointIncludeColumns": [
-    "ecosystem",
-    "length",
-    "topology",
-    "rep_type(s)",
-    "relaxase_type(s)",
-    "mpf_type",
-    "orit_type(s)",
-    "predicted_mobility",
-    "putative_phage_plasmid",
-    "domain",
-    "phylum",
-    "class",
-    "order",
-    "family",
-    "genus",
-    "species",
-    "strain",
-    "Type",
-    "Unified_subtype_name",
-    "PDC_type",
-    "PDC_unified_subtype_name",
-    "Anti_type",
-    "Anti_unified_subtype_name",
-    "num_def_sys",
-    "num_PDC_sys",
-    "num_Anti_sys",
-    "num_amr",
-    "assembly",
-    "num_plasmids",
-    "sample_id",
-    "MGE_target",
-    "Type_host",
-    "Unified_subtype_name_host",
-    "Anti_type_host",
-    "Anti_unified_subtype_name_host",
-    "num_def_sys_host",
-    "num_Anti_sys_host",
-    "total_chromosome_length_host",
-    "MGE_target_host",
-    "Member",
-    "Representative",
-    "cluster",
-    "depth",
-    "PTU_sHSBM (10)",
-    "new_PTU",
-    "is_representative",
-    "PCN",
-    "Ecosystem_1",
-    "Ecosystem_category",
-    "Ecosystem_type",
-    "Ecosystem_subtype",
-    "Ecosystem_specific",
-    "log10_length",
-    "log10_total_chromosome_length_host",
-    "log10_PCN",
-    "log2_num_def_sys",
-    "log2_num_PDC_sys",
-    "log2_num_Anti_sys",
-    "log2_num_plasmids",
-    "log2_num_amr",
-    "relaxase_MOBB",
-    "relaxase_MOBC",
-    "relaxase_MOBF",
-    "relaxase_MOBH",
-    "relaxase_MOBM",
-    "relaxase_MOBP",
-    "relaxase_MOBQ",
-    "relaxase_MOBT",
-    "relaxase_MOBV",
-    "mpf_MPF_F",
-    "mpf_MPF_G",
-    "mpf_MPF_I",
-    "mpf_MPF_T",
-    "orit_MOBF",
-    "orit_MOBH",
-    "orit_MOBP",
-    "orit_MOBQ",
-    "orit_MOBV",
-    "L1_cluster",
-    "L2_cluster",
-    "L3_cluster",
-    "L4_cluster",
-    "L5_cluster",
-    "L6_cluster",
-    "L7_cluster",
-    "L8_cluster",
-    "avg_dice_similarity"
+    "id",
+    "PTU cluster",
+    "Plasmid length (bp)",
+    "Topology",
+    "Putative phage plasmid",
+    "Plasmid Copy Number",
+    "Replication type(s)",
+    "Relaxase type(s)",
+    "MPF type",
+    "oriT type(s)",
+    "Predicted mobility",
+    "Defense type (plasmid)",
+    "Defense subtype (plasmid)",
+    "Defense systems (plasmid)",
+    "PDC type",
+    "PDC subtype",
+    "PDC systems",
+    "Anti-defense type (plasmid)",
+    "Anti-defense subtype (plasmid)",
+    "Anti-defense systems (plasmid)",
+    "AMR genes",
+    "MGE target (plasmid)",
+    "Host domain",
+    "Host phylum",
+    "Host class",
+    "Host order",
+    "Host family",
+    "Host genus",
+    "Host species",
+    "Host strain",
+    "Host chromosome length (bp)",
+    "Plasmids in host",
+    "Defense type (host)",
+    "Defense subtype (host)",
+    "Defense systems (host)",
+    "Anti-defense type (host)",
+    "Anti-defense subtype (host)",
+    "Anti-defense systems (host)",
+    "MGE target (host)",
+    "Ecosystem",
+    "Ecosystem category",
+    "Ecosystem type",
+    "Ecosystem subtype",
+    "Ecosystem specific",
+    "Infomap Cluster Level 1",
+    "Infomap Cluster Level 2",
+    "Infomap Cluster Level 3",
+    "Infomap Cluster Level 4",
+    "Infomap Cluster Level 5",
+    "Infomap Cluster Level 6",
+    "Infomap Cluster Level 7",
+    "Infomap Cluster Level 8",
+    "Average Dice Dissimilarity",
+    "Assembly ID"
+  ],
+  "numericColumns": [
+    "Plasmid length (bp)",
+    "Host chromosome length (bp)",
+    "Plasmid Copy Number",
+    "Defense systems (plasmid)",
+    "PDC systems",
+    "Anti-defense systems (plasmid)",
+    "AMR genes",
+    "Plasmids in host",
+    "Defense systems (host)",
+    "Anti-defense systems (host)",
+    "Average Dice Dissimilarity"
+  ],
+  "logColumnMapping": {
+    "Plasmid length (bp)": {
+      "log2": "Plasmid length log2 (bp)",
+      "log10": "Plasmid length log10 (bp)"
+    },
+    "Host chromosome length (bp)": {
+      "log2": "Host chromosome length log2 (bp)",
+      "log10": "Host chromosome length log10 (bp)"
+    },
+    "Plasmid Copy Number": {
+      "log2": "Plasmid Copy Number log2",
+      "log10": "Plasmid Copy Number log10"
+    },
+    "Defense systems (plasmid)": {
+      "log2": "Defense systems log2 (plasmid)",
+      "log10": "Defense systems log10 (plasmid)"
+    },
+    "PDC systems": {
+      "log2": "PDC systems log2",
+      "log10": "PDC systems log10"
+    },
+    "Anti-defense systems (plasmid)": {
+      "log2": "Anti-defense systems log2 (plasmid)",
+      "log10": "Anti-defense systems log10 (plasmid)"
+    },
+    "AMR genes": {
+      "log2": "AMR genes log2",
+      "log10": "AMR genes log10"
+    },
+    "Plasmids in host": {
+      "log2": "Plasmids in host log2",
+      "log10": "Plasmids in host log10"
+    },
+    "Defense systems (host)": {
+      "log2": "Defense systems log2 (host)",
+      "log10": "Defense systems log10 (host)"
+    },
+    "Anti-defense systems (host)": {
+      "log2": "Anti-defense systems log2 (host)",
+      "log10": "Anti-defense systems log10 (host)"
+    },
+    "Average Dice Dissimilarity": {
+      "log2": "Average Dice Dissimilarity log2",
+      "log10": "Average Dice Dissimilarity log10"
+    }
+  },
+  "columnDisplayNames": {
+    "Anti_type": "Anti-defense type (plasmid)",
+    "Anti_unified_subtype_name": "Anti-defense subtype (plasmid)",
+    "Anti_type_host": "Anti-defense type (host)",
+    "Anti_unified_subtype_name_host": "Anti-defense subtype (host)",
+    "avg_dice_similarity": "Average Dice Dissimilarity",
+    "class": "Host class",
+    "domain": "Host domain",
+    "Ecosystem_1": "Ecosystem",
+    "Ecosystem_category": "Ecosystem category",
+    "Ecosystem_specific": "Ecosystem specific",
+    "Ecosystem_subtype": "Ecosystem subtype",
+    "Ecosystem_type": "Ecosystem type",
+    "family": "Host family",
+    "genus": "Host genus",
+    "length": "Plasmid length (bp)",
+    "MGE_target": "MGE target (plasmid)",
+    "MGE_target_host": "MGE target (host)",
+    "mpf_type": "MPF type",
+    "new_PTU": "PTU cluster",
+    "num_amr": "AMR genes",
+    "num_Anti_sys": "Anti-defense systems (plasmid)",
+    "num_Anti_sys_host": "Anti-defense systems (host)",
+    "num_def_sys": "Defense systems (plasmid)",
+    "num_def_sys_host": "Defense systems (host)",
+    "num_PDC_sys": "PDC systems",
+    "num_plasmids": "Plasmids in host",
+    "order": "Host order",
+    "orit_type(s)": "oriT type(s)",
+    "PCN": "Plasmid Copy Number",
+    "PDC_type": "PDC type",
+    "PDC_unified_subtype_name": "PDC subtype",
+    "phylum": "Host phylum",
+    "predicted_mobility": "Predicted mobility",
+    "putative_phage_plasmid_normalized": "Putative phage plasmid",
+    "relaxase_type(s)": "Relaxase type(s)",
+    "rep_type(s)": "Replication type(s)",
+    "Representative": "Representative plasmid",
+    "assembly": "Assembly ID",
+    "sample_id": "Sample ID",
+    "species": "Host species",
+    "strain": "Host strain",
+    "topology_normalized": "Topology",
+    "total_chromosome_length_host": "Host chromosome length (bp)",
+    "Type": "Defense type (plasmid)",
+    "Type_host": "Defense type (host)",
+    "Unified_subtype_name": "Defense subtype (plasmid)",
+    "Unified_subtype_name_host": "Defense subtype (host)",
+    "L1_cluster": "Infomap Cluster Level 1",
+    "L2_cluster": "Infomap Cluster Level 2",
+    "L3_cluster": "Infomap Cluster Level 3",
+    "L4_cluster": "Infomap Cluster Level 4",
+    "L5_cluster": "Infomap Cluster Level 5",
+    "L6_cluster": "Infomap Cluster Level 6",
+    "L7_cluster": "Infomap Cluster Level 7",
+    "L8_cluster": "Infomap Cluster Level 8",
+    "log2_length": "Plasmid length log2 (bp)",
+    "log10_length": "Plasmid length log10 (bp)",
+    "log2_total_chromosome_length_host": "Host chromosome length log2 (bp)",
+    "log10_total_chromosome_length_host": "Host chromosome length log10 (bp)",
+    "log2_PCN": "Plasmid Copy Number log2",
+    "log10_PCN": "Plasmid Copy Number log10",
+    "log2_num_def_sys": "Defense systems log2 (plasmid)",
+    "log10_num_def_sys": "Defense systems log10 (plasmid)",
+    "log2_num_PDC_sys": "PDC systems log2",
+    "log10_num_PDC_sys": "PDC systems log10",
+    "log2_num_Anti_sys": "Anti-defense systems log2 (plasmid)",
+    "log10_num_Anti_sys": "Anti-defense systems log10 (plasmid)",
+    "log2_num_amr": "AMR genes log2",
+    "log10_num_amr": "AMR genes log10",
+    "log2_num_plasmids": "Plasmids in host log2",
+    "log10_num_plasmids": "Plasmids in host log10",
+    "log2_num_def_sys_host": "Defense systems log2 (host)",
+    "log10_num_def_sys_host": "Defense systems log10 (host)",
+    "log2_num_Anti_sys_host": "Anti-defense systems log2 (host)",
+    "log10_num_Anti_sys_host": "Anti-defense systems log10 (host)",
+    "log2_avg_dice_similarity": "Average Dice Dissimilarity log2",
+    "log10_avg_dice_similarity": "Average Dice Dissimilarity log10"
+  },
+  "columnCategories": {
+    "Plasmid length (bp)": [
+      "plasmid"
+    ],
+    "Topology": [
+      "plasmid"
+    ],
+    "Putative phage plasmid": [
+      "plasmid"
+    ],
+    "Plasmid Copy Number": [
+      "plasmid"
+    ],
+    "Replication type(s)": [
+      "mobility",
+      "plasmid"
+    ],
+    "Relaxase type(s)": [
+      "mobility",
+      "plasmid"
+    ],
+    "MPF type": [
+      "mobility",
+      "plasmid"
+    ],
+    "oriT type(s)": [
+      "mobility",
+      "plasmid"
+    ],
+    "Predicted mobility": [
+      "mobility",
+      "plasmid"
+    ],
+    "Defense type (plasmid)": [
+      "defense",
+      "plasmid"
+    ],
+    "Defense subtype (plasmid)": [
+      "defense",
+      "plasmid"
+    ],
+    "Defense systems (plasmid)": [
+      "defense",
+      "plasmid"
+    ],
+    "PDC type": [
+      "PDC",
+      "plasmid"
+    ],
+    "PDC subtype": [
+      "PDC",
+      "plasmid"
+    ],
+    "PDC systems": [
+      "PDC",
+      "plasmid"
+    ],
+    "Anti-defense type (plasmid)": [
+      "anti-defense",
+      "plasmid"
+    ],
+    "Anti-defense subtype (plasmid)": [
+      "anti-defense",
+      "plasmid"
+    ],
+    "Anti-defense systems (plasmid)": [
+      "anti-defense",
+      "plasmid"
+    ],
+    "AMR genes": [
+      "AMR",
+      "plasmid"
+    ],
+    "MGE target (plasmid)": [
+      "MGE",
+      "plasmid"
+    ],
+    "Host domain": [
+      "host",
+      "taxonomy"
+    ],
+    "Host phylum": [
+      "host",
+      "taxonomy"
+    ],
+    "Host class": [
+      "host",
+      "taxonomy"
+    ],
+    "Host order": [
+      "host",
+      "taxonomy"
+    ],
+    "Host family": [
+      "host",
+      "taxonomy"
+    ],
+    "Host genus": [
+      "host",
+      "taxonomy"
+    ],
+    "Host species": [
+      "host",
+      "taxonomy"
+    ],
+    "Host strain": [
+      "host",
+      "taxonomy"
+    ],
+    "Host chromosome length (bp)": [
+      "host"
+    ],
+    "Plasmids in host": [
+      "host"
+    ],
+    "Defense type (host)": [
+      "defense",
+      "host"
+    ],
+    "Defense subtype (host)": [
+      "defense",
+      "host"
+    ],
+    "Defense systems (host)": [
+      "defense",
+      "host"
+    ],
+    "Anti-defense type (host)": [
+      "anti-defense",
+      "host"
+    ],
+    "Anti-defense subtype (host)": [
+      "anti-defense",
+      "host"
+    ],
+    "Anti-defense systems (host)": [
+      "anti-defense",
+      "host"
+    ],
+    "MGE target (host)": [
+      "MGE",
+      "host"
+    ],
+    "Ecosystem": [
+      "ecosystem"
+    ],
+    "Ecosystem category": [
+      "ecosystem"
+    ],
+    "Ecosystem type": [
+      "ecosystem"
+    ],
+    "Ecosystem subtype": [
+      "ecosystem"
+    ],
+    "Ecosystem specific": [
+      "ecosystem"
+    ],
+    "PTU cluster": [
+      "network"
+    ],
+    "Infomap Cluster Level 1": [
+      "network"
+    ],
+    "Infomap Cluster Level 2": [
+      "network"
+    ],
+    "Infomap Cluster Level 3": [
+      "network"
+    ],
+    "Infomap Cluster Level 4": [
+      "network"
+    ],
+    "Infomap Cluster Level 5": [
+      "network"
+    ],
+    "Infomap Cluster Level 6": [
+      "network"
+    ],
+    "Infomap Cluster Level 7": [
+      "network"
+    ],
+    "Infomap Cluster Level 8": [
+      "network"
+    ],
+    "Average Dice Dissimilarity": [
+      "network"
+    ],
+    "Assembly ID": [
+      "metadata"
+    ],
+    "Sample ID": [
+      "metadata"
+    ],
+    "Representative plasmid": [
+      "metadata"
+    ]
+  },
+  "pointExcludeFromColorBy": [
+    "id",
+    "Assembly ID",
+    "Representative plasmid",
+    "Sample ID",
+    "Plasmid length log2 (bp)",
+    "Plasmid length log10 (bp)",
+    "Host chromosome length log2 (bp)",
+    "Host chromosome length log10 (bp)",
+    "Plasmid Copy Number log2",
+    "Plasmid Copy Number log10",
+    "Defense systems log2 (plasmid)",
+    "Defense systems log10 (plasmid)",
+    "PDC systems log2",
+    "PDC systems log10",
+    "Anti-defense systems log2 (plasmid)",
+    "Anti-defense systems log10 (plasmid)",
+    "AMR genes log2",
+    "AMR genes log10",
+    "Plasmids in host log2",
+    "Plasmids in host log10",
+    "Defense systems log2 (host)",
+    "Defense systems log10 (host)",
+    "Anti-defense systems log2 (host)",
+    "Anti-defense systems log10 (host)",
+    "Average Dice Dissimilarity log2",
+    "Average Dice Dissimilarity log10"
   ],
   "linkSourceBy": "source",
   "linkTargetBy": "target",

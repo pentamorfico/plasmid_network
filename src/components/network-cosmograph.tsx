@@ -36,15 +36,16 @@ const DEFAULT_CONFIG: CosmographConfig = {
   linkWidthStrategy: "single",
   linkDefaultWidth: 0.8,
   pointSizeScale: 10,
-    pointGreyoutOpacity: 0.01,
-    enableSimulation: false,
-  
+  pointGreyoutOpacity: 0.01,
+  enableSimulation: false,
   curvedLinks: false,
   pointOpacity: 0.7,
   scalePointsOnZoom: true,
   showFPSMonitor: false,
   linkGreyoutOpacity: 0.005,
   linkOpacity: 0.15,
+  showClusterLabels: false,
+  usePointColorStrategyForClusterLabels: false,
 }
 
 const DARK_BG: [number, number, number, number] = [18, 19, 20, 1]
@@ -187,7 +188,7 @@ function palettesEqual(a?: string[], b?: string[]) {
   return a.every((color, idx) => color === b[idx])
 }
 
-// Max 50 colors - beyond this, visual distinction is poor and iwanthue is slow
+
 const MAX_PALETTE_SIZE = 50
 
 function clampPaletteSize(value?: number) {
@@ -198,6 +199,7 @@ function clampPaletteSize(value?: number) {
 export function NetworkCosmograph({
   showLinks,
   showLabels,
+  labelType,
   colorBy,
   pointSize,
   linkOpacity,
@@ -207,6 +209,9 @@ export function NetworkCosmograph({
   hideIMGPR,
   onColorOptions,
   onColorByResolved,
+  onColumnDisplayNames,
+  onColumnCategories,
+  onNumericColumns,
   selectedPointIndices,
   onSelectionChange,
   polygonSelectionActive,
@@ -217,6 +222,7 @@ export function NetworkCosmograph({
 }: {
   showLinks: boolean
   showLabels: boolean
+  labelType: 'points' | 'clusters'
   colorBy?: string
   pointSize?: number
   linkOpacity?: number
@@ -226,6 +232,9 @@ export function NetworkCosmograph({
   hideIMGPR?: boolean
   onColorOptions?: (options: string[]) => void
   onColorByResolved?: (value: string | undefined) => void
+  onColumnDisplayNames?: (names: Record<string, string>) => void
+  onColumnCategories?: (categories: Record<string, string[]>) => void
+  onNumericColumns?: (columns: Set<string>) => void
   selectedPointIndices?: number[]
   onSelectionChange?: (indices: number[]) => void
   polygonSelectionActive?: boolean
@@ -259,6 +268,10 @@ export function NetworkCosmograph({
   const [currentColorStrategy, setCurrentColorStrategy] = React.useState<
     "categorical" | "continuous"
   >("categorical")
+  const [colorScale, setColorScale] = React.useState<"linear" | "log2" | "log10">("linear")
+  const [numericColumns, setNumericColumns] = React.useState<Set<string>>(new Set())
+  const [logColumnMapping, setLogColumnMapping] = React.useState<Record<string, { log2: string | null; log10: string | null }>>({})
+  const [baseColorColumn, setBaseColorColumn] = React.useState<string | undefined>(undefined)
   const [error, setError] = React.useState<string | null>(null)
   const paletteCacheRef = React.useRef<
     Map<string, { palette: string[]; strategy: "categorical" | "continuous" }>
@@ -277,10 +290,38 @@ export function NetworkCosmograph({
   const hasData = Boolean(dataFiles.points && dataFiles.links)
   const { resolvedTheme } = useTheme()
   const [mounted, setMounted] = React.useState(false)
+  const [legendSortBy, setLegendSortBy] = React.useState<"count" | "label">("count")
+  const legendRef = React.useRef<HTMLDivElement>(null)
 
   React.useEffect(() => {
     setMounted(true)
   }, [])
+
+  
+  React.useEffect(() => {
+    if (!legendRef.current) return
+    
+    const adjustWidth = () => {
+      const labels = legendRef.current?.querySelectorAll('[class*="label"]')
+      if (!labels || labels.length === 0) return
+      
+      let maxWidth = 200
+      labels.forEach((label) => {
+        const width = (label as HTMLElement).scrollWidth
+        if (width > maxWidth) maxWidth = width
+      })
+      
+      if (legendRef.current) {
+        legendRef.current.style.width = `${Math.min(maxWidth + 50, window.innerWidth * 0.9)}px`
+      }
+    }
+    
+    adjustWidth()
+    const observer = new MutationObserver(adjustWidth)
+    observer.observe(legendRef.current, { childList: true, subtree: true })
+    
+    return () => observer.disconnect()
+  }, [colorBy, legendSortBy, currentColorStrategy])
 
   const effectiveTheme = mounted
     ? resolvedTheme ?? (initialThemeIsDark ? "dark" : "light")
@@ -302,6 +343,10 @@ export function NetworkCosmograph({
   )
   const linkDefaultColor = React.useMemo<[number, number, number, number]>(
     () => (isDark ? [100, 100, 100, 0.28] : [145, 143, 142, 0.28]),
+    [isDark]
+  )
+  const clusterLabelColor = React.useMemo<[number, number, number, number]>(
+    () => (isDark ? [255, 255, 255, 1] : [0, 0, 0, 1]),
     [isDark]
   )
   const legendStyles = React.useMemo(
@@ -335,6 +380,12 @@ export function NetworkCosmograph({
     setConfig((prev) =>
       prev.pointColorBy === colorBy ? prev : { ...prev, pointColorBy: colorBy }
     )
+    
+    
+    if (!colorBy.startsWith('log2_') && !colorBy.startsWith('log10_')) {
+      setBaseColorColumn(colorBy)
+      setColorScale('linear') 
+    }
   }, [colorBy])
 
   React.useEffect(() => {
@@ -356,32 +407,45 @@ export function NetworkCosmograph({
     }))
   }, [linkDefaultColor])
 
-  // Ref to track filter source for crossfilter
+  React.useEffect(() => {
+    const showClusterLabels = showLabels && labelType === 'clusters'
+    const showPointLabels = showLabels && labelType === 'points'
+    
+    const useColorForClusterLabels = labelType === 'clusters' && colorBy === 'PTU cluster'
+    setConfig((prev) => ({
+      ...prev,
+      showClusterLabels,
+      pointLabelBy: showPointLabels ? 'id' : undefined,
+      usePointColorStrategyForClusterLabels: useColorForClusterLabels,
+      clusterLabelColor: useColorForClusterLabels ? undefined : clusterLabelColor,
+    }))
+  }, [showLabels, labelType, colorBy, clusterLabelColor])
+
+  
   const filterSourceRef = React.useRef({ id: 'custom-filter' })
 
-  // Effect to apply point filters using Mosaic Selection crossfilter
+  
   React.useEffect(() => {
     const cg = cosmographRef.current as any
     if (!cg) return
     
-    // Wait for pointsSelection to be available
+    
     const selection = cg.pointsSelection
     if (!selection) {
       console.log('[Filter] pointsSelection not available yet')
       return
     }
     
-    // Build filter conditions
+    
     const conditions: any[] = []
     
-    // Filter out nodes with empty metadata in the selected color column
+    
     if (hideNoMetadata && colorBy) {
       const col = column(colorBy)
       conditions.push(isNotNull(col))
       conditions.push(sql`CAST(${col} AS VARCHAR) != ''`)
     }
     
-    // Filter out IMGPR plasmids (id starts with 'IMGPR')
     if (hideIMGPR) {
       conditions.push(sql`NOT "id" LIKE 'IMGPR%'`)
     }
@@ -391,7 +455,6 @@ export function NetworkCosmograph({
       console.log('[Filter] Applying filter with predicate')
       
       try {
-        // Create a selection clause and update the selection
         const filterClause = {
           source: filterSourceRef.current,
           value: { hideNoMetadata, hideIMGPR, colorBy },
@@ -402,7 +465,6 @@ export function NetworkCosmograph({
         console.warn('[Filter] Error applying filter:', err)
       }
     } else {
-      // Clear the filter by updating with null predicate
       try {
         const clearClause = {
           source: filterSourceRef.current,
@@ -447,9 +509,6 @@ export function NetworkCosmograph({
     })
   }, [handlePointMouseOver, handlePointMouseOut])
 
-  // NOTA: resolveRowIndex y resolveRowIndices eliminados
-  // Los índices de Cosmograph ya coinciden con los del parquet (idx = posición)
-  // No necesitamos resolver nada
 
   const handlePointClick = React.useCallback(
     (index?: number | null) => {
@@ -460,7 +519,6 @@ export function NetworkCosmograph({
         onSelectionChange?.([])
         return
       }
-      // Los índices de Cosmograph ya coinciden con los del parquet
       onPointSelected(index)
       onSelectionChange?.([index])
     },
@@ -476,7 +534,6 @@ export function NetworkCosmograph({
         onSelectionChange?.([])
         return
       }
-      // Los índices de Cosmograph ya coinciden con los del parquet
       onPointSelected(index)
       onSelectionChange?.([index])
     },
@@ -500,9 +557,7 @@ export function NetworkCosmograph({
     })
   }, [handlePointClick, handleLabelClick, onPointSelected])
 
-  // Flag para evitar re-aplicar selecciones que vinieron de Cosmograph
   const selectionFromCosmographRef = React.useRef(false)
-    // Flag para pausar el polling mientras se aplica una selección externa
   const applyingExternalSelectionRef = React.useRef(false)
 
   React.useEffect(() => {
@@ -511,17 +566,13 @@ export function NetworkCosmograph({
     const cg = cosmographRef.current as any
     if (!cg) return
 
-    // Si la selección vino de Cosmograph (leyenda, polygon, etc), no re-aplicarla
     if (selectionFromCosmographRef.current) {
       selectionFromCosmographRef.current = false
       return
     }
 
-    // Pausar el polling mientras aplicamos la selección externa
     applyingExternalSelectionRef.current = true
     
-    // Actualizar lastSelectionRef ANTES de aplicar para que el polling no detecte
-    // este cambio como nuevo (evita el loop de feedback tabla → cosmograph → tabla)
     const sorted = [...selectedPointIndices].sort((a, b) => a - b)
     lastSelectionRef.current = sorted
 
@@ -529,7 +580,6 @@ export function NetworkCosmograph({
       try {
         await cg.dataUploaded?.()
       } catch {
-        // ignore readiness errors
       }
       if (!cg?.selectPoints) {
         applyingExternalSelectionRef.current = false
@@ -540,8 +590,6 @@ export function NetworkCosmograph({
       } else {
         cg.selectPoints(selectedPointIndices, false)
       }
-      // Esperar un poco para que Cosmograph procese la selección
-      // antes de reanudar el polling
       setTimeout(() => {
         applyingExternalSelectionRef.current = false
       }, 100)
@@ -565,8 +613,6 @@ export function NetworkCosmograph({
   const selectionCheckIntervalRef = React.useRef<ReturnType<typeof setInterval> | null>(null)
   const [isProcessingSelection, setIsProcessingSelection] = React.useState(false)
 
-  // Polling para detectar cambios de selección en Cosmograph
-  // Esto es más robusto que onClick porque detecta cuando la selección REALMENTE cambia
   React.useEffect(() => {
     if (!onPointSelected) return
     const cg = cosmographRef.current as any
@@ -581,20 +627,17 @@ export function NetworkCosmograph({
     }
 
     const checkSelection = () => {
-      // No procesar mientras se aplica una selección externa
       if (applyingExternalSelectionRef.current) return
       
       const currentSelection = cg?.getSelectedPointIndices?.() ?? cg?.getSelectedIndices?.()
       const arr = Array.isArray(currentSelection) ? currentSelection : []
       const filtered = arr.filter((v: number) => Number.isInteger(v) && v >= 0)
       
-      // Solo procesar si hay cambio REAL (comparar arrays, no solo longitud)
       if (arraysEqual(filtered, lastSelectionRef.current)) return
       
       lastSelectionRef.current = [...filtered]
       ++selectionRequestIdRef.current
 
-      // Mostrar spinner para selecciones grandes
       if (filtered.length > 1000) {
         setIsProcessingSelection(true)
       }
@@ -602,19 +645,11 @@ export function NetworkCosmograph({
       selectionFromCosmographRef.current = true
 
       if (filtered.length === 0) {
-        // DESELECCIÓN - solo usar onSelectionChange, NO onLargeSelectionFinished
-        // Esto evita que se resetee el toggle automáticamente
         setIsProcessingSelection(false)
         onPointSelected(null)
         onSelectionChange?.([])
       } else {
-        // SELECCIÓN
-        // Los índices de Cosmograph ya coinciden con los del parquet (idx = posición)
-        // No necesitamos resolveRowIndices
-        
-        // onLargeSelectionFinished para selecciones grandes (leyenda, polígono) - activa filtro
-        // onSelectionChange para selecciones de 1 punto (click individual) - NO activa filtro
-        // Umbral: más de 1 punto = selección grande (probablemente de leyenda)
+
         if (filtered.length > 1) {
           onLargeSelectionFinished?.(filtered)
         } else {
@@ -625,7 +660,6 @@ export function NetworkCosmograph({
       }
     }
 
-    // Polling cada 30ms para detectar cambios
     selectionCheckIntervalRef.current = setInterval(checkSelection, 30)
 
     return () => {
@@ -658,7 +692,6 @@ export function NetworkCosmograph({
   }, [onPointSelected, onSelectionChange, onLargeSelectionFinished, hasData])
 
   React.useEffect(() => {
-    // keep polygon selection callback inside Cosmograph config
     setConfig((prev) => {
       const next = {
         ...prev,
@@ -679,7 +712,6 @@ export function NetworkCosmograph({
           const emitSelection = (indices: number[] | null) => {
             selectionFromCosmographRef.current = true
             if (indices && indices.length > 0) {
-              // Los índices de Cosmograph ya coinciden con los del parquet
               const filtered = indices.filter(
                 (v) => Number.isInteger(v) && v >= 0
               )
@@ -691,12 +723,11 @@ export function NetworkCosmograph({
             }
           }
 
-          // Flag para emitir solo una vez
           let emitted = false
           const attempts = [0, 50, 150]
           attempts.forEach((delay, idx) => {
             setTimeout(() => {
-              if (emitted) return  // Ya emitimos, salir
+              if (emitted) return  
               const selection = readSelection()
               if (selection || idx === attempts.length - 1) {
                 emitted = true
@@ -743,7 +774,6 @@ export function NetworkCosmograph({
   }, [hoveredIndex, colorBy])
 
 
-  // Load pre-generated palettes from JSON file
   const loadPalettesFromFile = React.useCallback(async () => {
     if (paletteCacheRef.current.size > 0) {
       console.log('[loadPalettesFromFile] Palettes already loaded')
@@ -760,9 +790,9 @@ export function NetworkCosmograph({
       
       const data = await response.json()
       
-      // Support both formats: 
-      // 1. Simple format: { "column": ["#color1", ...] }
-      // 2. Extended format: { "columns": { "column": { strategy, palette } } }
+      
+      
+      
       if (data.columns) {
         const columns = data.columns as Record<string, { 
           strategy: 'categorical' | 'continuous'
@@ -773,7 +803,7 @@ export function NetworkCosmograph({
         }
         console.log(`[loadPalettesFromFile] Loaded ${Object.keys(columns).length} palettes from file (extended format)`)
       } else {
-        // Simple format - assume all are categorical
+        
         for (const [colName, palette] of Object.entries(data as Record<string, string[]>)) {
           paletteCacheRef.current.set(colName, { palette, strategy: 'categorical' })
         }
@@ -823,7 +853,8 @@ export function NetworkCosmograph({
     const columnType = getColumnType(summaryEntry)
     const approxUnique = getApproxUnique(summaryEntry)
 
-    if (isNumericType(columnType)) {
+    
+    if (numericColumns.has(colorBy) || isNumericType(columnType)) {
       const palette = getSequentialColors("Viridis", 9)
       if (palette) {
         applyPalette(palette, "continuous")
@@ -853,10 +884,12 @@ export function NetworkCosmograph({
       setLoadPhase("fetching")
       setError(null)
       try {
+        
+        const cacheBuster = `?v=${Date.now()}`
         const [pointsFile, linksFile, configJson] = await Promise.all([
-          fetchFile(`${BASE_URL}data/plasmid-network-points.parquet`, "points.parquet"),
-          fetchFile(`${BASE_URL}data/plasmid-network-links.parquet`, "links.parquet"),
-          fetch(`${BASE_URL}data/plasmid-network-config.json`).then(async (res) => {
+          fetchFile(`${BASE_URL}data/plasmid-network-points.parquet${cacheBuster}`, "points.parquet"),
+          fetchFile(`${BASE_URL}data/plasmid-network-links.parquet${cacheBuster}`, "links.parquet"),
+          fetch(`${BASE_URL}data/plasmid-network-config.json${cacheBuster}`).then(async (res) => {
             if (!res.ok) return {}
             return res.json()
           }),
@@ -865,24 +898,30 @@ export function NetworkCosmograph({
         const providedColor =
           colorBy && colorBy.length > 0 ? colorBy : undefined
         let resolvedColor: string | undefined
+        const optionList: string[] = []
         const optionsSet = new Set<string>()
+        const excludeFromColorBy = new Set<string>(configJson.pointExcludeFromColorBy || [])
+        
+        excludeFromColorBy.add('x')
+        excludeFromColorBy.add('y')
+        
         const addOption = (val?: string) => {
-          if (val) optionsSet.add(val)
+          if (val && !excludeFromColorBy.has(val) && !optionsSet.has(val)) {
+            optionsSet.add(val)
+            optionList.push(val)
+          }
         }
 
+        
+        if (Array.isArray(configJson.pointIncludeColumns)) {
+          configJson.pointIncludeColumns.forEach(addOption)
+        }
+        
         addOption(configJson.pointColorBy)
         addOption(configJson.pointSizeBy)
         addOption(configJson.pointLabelBy)
         addOption(configJson.pointClusterBy)
-        addOption(configJson.pointXBy)
-        addOption(configJson.pointYBy)
-        if (Array.isArray(configJson.pointIncludeColumns)) {
-          configJson.pointIncludeColumns.forEach(addOption)
-        }
 
-        const optionList = Array.from(optionsSet).sort((a, b) =>
-          a.localeCompare(b)
-        )
         const defaultColorBy =
           providedColor ??
           configJson.pointColorBy ??
@@ -891,7 +930,7 @@ export function NetworkCosmograph({
 
         resolvedColor = defaultColorBy
 
-        // Paleta inicial temporal (se regenerará con el número correcto de categorías después de dataUploaded)
+        
         const iwanthueOptions = {
           clustering: "k-means" as const,
           quality: 100,
@@ -919,18 +958,29 @@ export function NetworkCosmograph({
           statusIndicatorMode: false,
           componentsDisplayStateMode: false,
           pointColorBy: resolvedColor ?? prev.pointColorBy,
+          pointClusterBy: configJson.pointClusterBy ?? 'PTU cluster',
           pointColorStrategy: "categorical",
           pointColorPalette: initialPalette,
+          showClusterLabels: showLabels && labelType === 'clusters',
+          pointLabelBy: showLabels && labelType === 'points' ? 'id' : undefined,
+          usePointColorStrategyForClusterLabels: true,
         }))
         onColorOptions?.(optionList)
         onColorByResolved?.(resolvedColor)
+        onColumnDisplayNames?.(configJson.columnDisplayNames || {})
+        onColumnCategories?.(configJson.columnCategories || {})
+        const numCols = new Set(configJson.numericColumns || [])
+        setNumericColumns(numCols)
+        onNumericColumns?.(numCols)
+        setLogColumnMapping(configJson.logColumnMapping || {})
+        setBaseColorColumn(resolvedColor)
         setLoadPhase("uploading")
         setDataFiles({ points: pointsFile, links: linksFile })
       } catch (err) {
         setError(err instanceof Error ? err.message : "Error loading data")
         setLoadPhase("fetching")
       } finally {
-        // keep loadPhase as-is; the rest of the pipeline (upload/render) will update it
+        
       }
     }
 
@@ -964,6 +1014,47 @@ export function NetworkCosmograph({
     paletteCacheRef.current.clear()
   }, [dataFiles.points, dataFiles.links])
 
+  
+  React.useEffect(() => {
+    const currentCol = config.pointColorBy
+    if (!currentCol) return
+    
+    
+    let baseCol = baseColorColumn
+    if (!baseCol) {
+      
+      if (currentCol.startsWith('log2_') || currentCol.startsWith('log10_')) {
+        baseCol = Object.keys(logColumnMapping).find(key => {
+          const mapping = logColumnMapping[key]
+          return mapping.log2 === currentCol || mapping.log10 === currentCol
+        })
+      } else {
+        baseCol = currentCol
+      }
+      if (baseCol) setBaseColorColumn(baseCol)
+    }
+    
+    if (!baseCol || !numericColumns.has(baseCol)) return
+    
+    
+    let targetColumn = baseCol
+    const mapping = logColumnMapping[baseCol]
+    if (colorScale === 'log2' && mapping?.log2) {
+      targetColumn = mapping.log2
+    } else if (colorScale === 'log10' && mapping?.log10) {
+      targetColumn = mapping.log10
+    }
+    
+    
+    if (targetColumn !== currentCol) {
+      setConfig(prev => ({ ...prev, pointColorBy: targetColumn }))
+    }
+    
+    
+    paletteCacheRef.current.delete(currentCol)
+    paletteCacheRef.current.delete(targetColumn)
+  }, [colorScale, config.pointColorBy, numericColumns, logColumnMapping, baseColorColumn])
+
   const loadPointsForTable = React.useCallback(async () => {
     if (!onPointsDataLoaded || pointsDataLoadedRef.current) return
     const cg = cosmographRef.current as any
@@ -971,18 +1062,28 @@ export function NetworkCosmograph({
     try {
       await cg.dataUploaded?.()
       
-      // Load pre-generated palettes from JSON
+      
       void loadPalettesFromFile()
       
       const raw = await cg.getPointsData()
-      let columns: string[] =
+      let allColumns: string[] =
         cg?.stats?.pointsSummary?.map(
           (entry: any) =>
             entry?.column_name ?? entry?.column ?? entry?.name ?? entry?.columnName
         )?.filter(Boolean) ?? []
-      if (columns.length === 0) {
-        columns = raw?.schema?.fields?.map((field: any) => field?.name) ?? []
+      if (allColumns.length === 0) {
+        allColumns = raw?.schema?.fields?.map((field: any) => field?.name) ?? []
       }
+      
+      
+      
+      let columns: string[] = allColumns
+      if (config?.pointIncludeColumns && Array.isArray(config.pointIncludeColumns)) {
+        const allColumnsSet = new Set(allColumns)
+        
+        columns = config.pointIncludeColumns.filter(col => allColumnsSet.has(col))
+      }
+      
       const totalRows = Number(
         cg?.public?.stats?.pointsCount ?? raw?.numRows ?? raw?.length ?? 0
       )
@@ -991,7 +1092,7 @@ export function NetworkCosmograph({
         pointsDataLoadedRef.current = true
       }
     } catch {
-      // ignore load failures for now
+      
     }
   }, [onPointsDataLoaded, loadPalettesFromFile])
 
@@ -1039,7 +1140,7 @@ export function NetworkCosmograph({
   const loadMessage = loadPhase === "ready" ? null : "Loading graph…"
 
 
-  // Ensure we don't get stuck with the overlay if events fire before listeners attach
+  
   React.useEffect(() => {
     if (hasData && loadPhase === "uploading") {
       setLoadPhase("validating")
@@ -1054,7 +1155,7 @@ export function NetworkCosmograph({
       try {
         await (cosmographRef.current as any)?.dataUploaded?.()
       } catch {
-        // ignore and fall back to rendering
+        
       }
       if (!cancelled) {
         ;(cosmographRef.current as any)?.step?.()
@@ -1078,7 +1179,7 @@ export function NetworkCosmograph({
         return
       }
       if (performance.now() - started > 8000) {
-        // Safety timeout to avoid getting stuck
+        
         setLoadPhase("ready")
         window.clearInterval(interval)
       }
@@ -1203,41 +1304,58 @@ export function NetworkCosmograph({
             </div>
           )}
           <div
-          className={`pointer-events-auto absolute right-3 top-3 z-10 flex flex-col gap-2 rounded-md p-2 text-xs shadow-none backdrop-blur-sm ${
-            isDark ? "bg-black/50" : "bg-white/80"
-          }`}
-          style={{ ...legendStyles, color: legendText }}
+            ref={legendRef}
+            className="cosmograph-legend"
+            style={{ ...legendStyles, color: legendText }}
           >
               <CosmographSizeLegend ref={sizeLegendRef} style={{ display: "none" }} />
+            {currentColorStrategy === "continuous" && baseColorColumn && numericColumns.has(baseColorColumn) && (
+              <div className="flex items-center gap-2 pb-2 text-xs border-b" style={{ borderColor: legendText + '20' }}>
+                <span className="opacity-70">Scale:</span>
+                {(['linear', 'log2', 'log10'] as const).map((scale) => {
+                  const mapping = logColumnMapping[baseColorColumn]
+                  const isAvailable = scale === 'linear' || (mapping && ((scale === 'log2' && mapping.log2) || (scale === 'log10' && mapping.log10)))
+                  if (!isAvailable) return null
+                  
+                  return (
+                    <button
+                      key={scale}
+                      onClick={() => setColorScale(scale)}
+                      className="cursor-pointer rounded px-2 py-0.5 transition-colors"
+                      style={{
+                        background: colorScale === scale ? legendText + '20' : 'transparent',
+                        color: legendText,
+                        opacity: colorScale === scale ? 1 : 0.6,
+                      }}
+                    >
+                      {scale}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
             {currentColorStrategy === "continuous" ? (
               <CosmographRangeColorLegend />
             ) : (
-              <CosmographTypeColorLegend />
+              <CosmographTypeColorLegend 
+                key={`legend-${legendSortBy}-${colorBy}`}
+                sortBy={legendSortBy === "label" ? colorBy : "count"}
+                sortOrder={legendSortBy === "label" ? "ASC" : "DESC"}
+              />
             )}
-            {isProcessingSelection && (
-              <div className="flex items-center gap-2 pt-1 text-xs opacity-70">
-                <svg 
-                  className="h-3 w-3 animate-spin" 
-                  viewBox="0 0 24 24" 
-                  fill="none"
-                >
-                  <circle 
-                    className="opacity-25" 
-                    cx="12" 
-                    cy="12" 
-                    r="10" 
-                    stroke="currentColor" 
-                    strokeWidth="4"
-                  />
-                  <path 
-                    className="opacity-75" 
-                    fill="currentColor" 
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  />
-                </svg>
-                <span>Processing...</span>
-              </div>
-            )}
+            <div className="flex items-center gap-2 pt-2 text-xs opacity-70">
+              <span>Sort:</span>
+              <button
+                onClick={() => setLegendSortBy(legendSortBy === "count" ? "label" : "count")}
+                className="cursor-pointer rounded px-2 py-0.5 transition-colors hover:opacity-100"
+                style={{
+                  background: legendBg,
+                  color: legendText,
+                }}
+              >
+                {legendSortBy === "count" ? "By Size" : "Alphabetical"}
+              </button>
+            </div>
             {error && (
               <span className="text-xs text-rose-300">Error: {error}</span>
             )}
@@ -1265,7 +1383,6 @@ export function NetworkCosmograph({
               linkSourceIndexBy="sourceidx"
               linkTargetBy="target"
               linkTargetIndexBy="targetidx"
-              pointLabelBy={showLabels ? "id" : undefined}
             />
           ) : (
             <div className="flex w-full items-center justify-center text-white/70">
