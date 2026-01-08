@@ -173,8 +173,10 @@ function App() {
   const [showLabels, setShowLabels] = React.useState(true)
   const [colorBy, setColorBy] = React.useState<string>("")
   const [colorOptions, setColorOptions] = React.useState<string[]>([])
-  const [pointSize, setPointSize] = React.useState<number>(5)
-  const [linkOpacity, setLinkOpacity] = React.useState<number>(0.6)
+  const [pointSize, setPointSize] = React.useState<number>(10)
+  const [linkOpacity, setLinkOpacity] = React.useState<number>(0.15)
+  const [pointGreyoutOpacity, setPointGreyoutOpacity] = React.useState<number>(0.01)
+  const [linkGreyoutOpacity, setLinkGreyoutOpacity] = React.useState<number>(0.005)
   const [hideNoMetadata, setHideNoMetadata] = React.useState(false)
   const [hideIMGPR, setHideIMGPR] = React.useState(false)
   const [tableOpen, setTableOpen] = React.useState(false)
@@ -303,6 +305,10 @@ function App() {
         onChangePointSize={setPointSize}
         linkOpacity={linkOpacity}
         onChangeLinkOpacity={setLinkOpacity}
+        pointGreyoutOpacity={pointGreyoutOpacity}
+        onChangePointGreyoutOpacity={setPointGreyoutOpacity}
+        linkGreyoutOpacity={linkGreyoutOpacity}
+        onChangeLinkGreyoutOpacity={setLinkGreyoutOpacity}
         hideNoMetadata={hideNoMetadata}
         onToggleHideNoMetadata={setHideNoMetadata}
         hideIMGPR={hideIMGPR}
@@ -329,6 +335,8 @@ function App() {
                 colorBy={colorBy}
                 pointSize={pointSize}
                 linkOpacity={linkOpacity}
+                pointGreyoutOpacity={pointGreyoutOpacity}
+                linkGreyoutOpacity={linkGreyoutOpacity}
                 hideNoMetadata={hideNoMetadata}
                 hideIMGPR={hideIMGPR}
                 onColorOptions={(opts) => setColorOptions(opts)}

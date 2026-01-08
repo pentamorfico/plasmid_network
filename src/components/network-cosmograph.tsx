@@ -32,7 +32,7 @@ const DEFAULT_CONFIG: CosmographConfig = {
   focusPointOnLabelClick: true,
   showHoveredPointLabel: false,
   pointSizeStrategy: "single",
-  pointDefaultSize: 8,
+  pointDefaultSize: 10,
   linkWidthStrategy: "single",
   linkDefaultWidth: 0.8,
   pointSizeScale: 10,
@@ -44,7 +44,7 @@ const DEFAULT_CONFIG: CosmographConfig = {
   scalePointsOnZoom: true,
   showFPSMonitor: false,
   linkGreyoutOpacity: 0.005,
-  linkOpacity: 0.6,
+  linkOpacity: 0.15,
 }
 
 const DARK_BG: [number, number, number, number] = [18, 19, 20, 1]
@@ -201,6 +201,8 @@ export function NetworkCosmograph({
   colorBy,
   pointSize,
   linkOpacity,
+  pointGreyoutOpacity,
+  linkGreyoutOpacity,
   hideNoMetadata,
   hideIMGPR,
   onColorOptions,
@@ -218,6 +220,8 @@ export function NetworkCosmograph({
   colorBy?: string
   pointSize?: number
   linkOpacity?: number
+  pointGreyoutOpacity?: number
+  linkGreyoutOpacity?: number
   hideNoMetadata?: boolean
   hideIMGPR?: boolean
   onColorOptions?: (options: string[]) => void
@@ -246,6 +250,8 @@ export function NetworkCosmograph({
     linkDefaultColor: initialThemeIsDark ? DARK_LINK : LIGHT_LINK,
     pointDefaultSize: pointSize ?? DEFAULT_CONFIG.pointDefaultSize,
     linkOpacity: linkOpacity ?? DEFAULT_CONFIG.linkOpacity,
+    pointGreyoutOpacity: pointGreyoutOpacity ?? DEFAULT_CONFIG.pointGreyoutOpacity,
+    linkGreyoutOpacity: linkGreyoutOpacity ?? DEFAULT_CONFIG.linkGreyoutOpacity,
   }))
   const [loadPhase, setLoadPhase] = React.useState<
     "fetching" | "uploading" | "validating" | "rendering" | "ready"
@@ -337,8 +343,10 @@ export function NetworkCosmograph({
       backgroundColor,
       pointDefaultSize: pointSize ?? prev.pointDefaultSize,
       linkOpacity: linkOpacity ?? prev.linkOpacity,
+      pointGreyoutOpacity: pointGreyoutOpacity ?? prev.pointGreyoutOpacity,
+      linkGreyoutOpacity: linkGreyoutOpacity ?? prev.linkGreyoutOpacity,
     }))
-  }, [backgroundColor, pointSize, linkOpacity])
+  }, [backgroundColor, pointSize, linkOpacity, pointGreyoutOpacity, linkGreyoutOpacity])
 
   React.useEffect(() => {
     setConfig((prev) => ({

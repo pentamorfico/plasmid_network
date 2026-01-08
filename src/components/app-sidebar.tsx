@@ -150,6 +150,10 @@ type ControlProps = {
   onChangePointSize: (value: number) => void
   linkOpacity: number
   onChangeLinkOpacity: (value: number) => void
+  pointGreyoutOpacity: number
+  onChangePointGreyoutOpacity: (value: number) => void
+  linkGreyoutOpacity: number
+  onChangeLinkGreyoutOpacity: (value: number) => void
   hideNoMetadata: boolean
   onToggleHideNoMetadata: (value: boolean) => void
   hideIMGPR: boolean
@@ -169,6 +173,10 @@ export function AppSidebar({
   onChangePointSize,
   linkOpacity,
   onChangeLinkOpacity,
+  pointGreyoutOpacity,
+  onChangePointGreyoutOpacity,
+  linkGreyoutOpacity,
+  onChangeLinkGreyoutOpacity,
   hideNoMetadata,
   onToggleHideNoMetadata,
   hideIMGPR,
@@ -288,6 +296,40 @@ export function AppSidebar({
                 step={0.05}
                 value={[linkOpacity]}
                 onValueChange={([v]) => onChangeLinkOpacity(v)}
+              />
+            </div>
+            <div className="space-y-2 rounded-lg border px-3 py-2">
+              <div className="flex items-center justify-between">
+                <div className="text-[0.64rem] font-semibold tracking-wide uppercase">
+                  Point greyout opacity
+                </div>
+                <span className="text-[0.6rem] text-muted-foreground">
+                  {pointGreyoutOpacity.toFixed(3)}
+                </span>
+              </div>
+              <Slider
+                min={0}
+                max={0.5}
+                step={0.005}
+                value={[pointGreyoutOpacity]}
+                onValueChange={([v]) => onChangePointGreyoutOpacity(v)}
+              />
+            </div>
+            <div className="space-y-2 rounded-lg border px-3 py-2">
+              <div className="flex items-center justify-between">
+                <div className="text-[0.64rem] font-semibold tracking-wide uppercase">
+                  Link greyout opacity
+                </div>
+                <span className="text-[0.6rem] text-muted-foreground">
+                  {linkGreyoutOpacity.toFixed(3)}
+                </span>
+              </div>
+              <Slider
+                min={0}
+                max={0.5}
+                step={0.005}
+                value={[linkGreyoutOpacity]}
+                onValueChange={([v]) => onChangeLinkGreyoutOpacity(v)}
               />
             </div>
                 <div className="flex items-center justify-between rounded-lg border px-3 py-2">

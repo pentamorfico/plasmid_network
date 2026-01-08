@@ -11,7 +11,10 @@
  * 6. Saves prepared data as parquet files
  * 7. Creates configuration JSON
  *
- * Run: npm run prepare-data
+ * Usage:
+ *   npm run prepare-data                    # Process all data
+ *   node scripts/prepare-data.js 1000       # Limit to 1000 nodes
+ *   node scripts/prepare-data.js 1000 5000  # Limit to 1000 nodes and 5000 edges
  */
 
 import { Database } from 'duckdb-async';
@@ -30,13 +33,16 @@ const OUTPUT_EDGES = join(__dirname, '../public/data/plasmid-network-links.parqu
 const OUTPUT_CONFIG = join(__dirname, '../public/data/plasmid-network-config.json');
 
 // Limits (set to null to process all data)
-const MAX_NODES = null;  // process all nodes
-const MAX_EDGES = null;  // process all edges
+// Can be overridden via command line args: node prepare-data.js [maxNodes] [maxEdges]
+const MAX_NODES = process.argv[2] ? parseInt(process.argv[2], 10) : null;
+const MAX_EDGES = process.argv[3] ? parseInt(process.argv[3], 10) : null;
 
 async function main() {
   console.log('🚀 Starting Cosmograph data preparation...');
   console.log(`   Input nodes: ${INPUT_NODES}`);
   console.log(`   Input edges: ${INPUT_EDGES}`);
+  if (MAX_NODES) console.log(`   Limit nodes: ${MAX_NODES.toLocaleString()}`);
+  if (MAX_EDGES) console.log(`   Limit edges: ${MAX_EDGES.toLocaleString()}`);
   console.log();
 
   const db = await Database.create(':memory:');
