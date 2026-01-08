@@ -117,7 +117,7 @@ async function main() {
     'relaxase_MOBB', 'relaxase_MOBC', 'relaxase_MOBF', 'relaxase_MOBH', 'relaxase_MOBM', 'relaxase_MOBP', 'relaxase_MOBQ', 'relaxase_MOBT', 'relaxase_MOBV',
     'orit_MOBB', 'orit_MOBC', 'orit_MOBF', 'orit_MOBH', 'orit_MOBP', 'orit_MOBQ', 'orit_MOBV',
     // Exclude technical/internal columns that shouldn't be visible
-    'ecosystem', 'Ecosystem_1', 'Member', 'PTU_sHSBM (10)', 'cluster', 'depth', 'is_representative',
+    'ecosystem', 'Member', 'PTU_sHSBM (10)', 'cluster', 'depth', 'is_representative',
     // Exclude metadata columns
     'sample_id', 'Representative'
   ].filter(col => existingCols.has(col));
@@ -167,7 +167,9 @@ async function main() {
       CASE WHEN TRY_CAST(num_Anti_sys_host AS DOUBLE) > 0 THEN LOG2(TRY_CAST(num_Anti_sys_host AS DOUBLE)) ELSE NULL END AS log2_num_Anti_sys_host,
       CASE WHEN TRY_CAST(num_Anti_sys_host AS DOUBLE) > 0 THEN LOG10(TRY_CAST(num_Anti_sys_host AS DOUBLE)) ELSE NULL END AS log10_num_Anti_sys_host,
       CASE WHEN avg_dice_similarity > 0 THEN LOG2(avg_dice_similarity) ELSE NULL END AS log2_avg_dice_similarity,
-      CASE WHEN avg_dice_similarity > 0 THEN LOG10(avg_dice_similarity) ELSE NULL END AS log10_avg_dice_similarity
+      CASE WHEN avg_dice_similarity > 0 THEN LOG10(avg_dice_similarity) ELSE NULL END AS log10_avg_dice_similarity,
+      -- Rename Ecosystem_1 to Ecosystem
+      "Ecosystem_1" AS "Ecosystem"
     FROM nodes_raw
   `);
   
