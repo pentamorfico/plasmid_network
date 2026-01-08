@@ -130,7 +130,6 @@
     "avg_dice_similarity": "Average Dice Dissimilarity",
     "class": "Host class",
     "domain": "Host domain",
-    "Ecosystem_1": "Ecosystem",
     "Ecosystem_category": "Ecosystem category",
     "Ecosystem_specific": "Ecosystem specific",
     "Ecosystem_subtype": "Ecosystem subtype",
