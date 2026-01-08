@@ -611,7 +611,6 @@ export function NetworkCosmograph({
   const selectionRequestIdRef = React.useRef<number>(0)
   const lastSelectionRef = React.useRef<number[]>([])
   const selectionCheckIntervalRef = React.useRef<ReturnType<typeof setInterval> | null>(null)
-  const [isProcessingSelection, setIsProcessingSelection] = React.useState(false)
 
   React.useEffect(() => {
     if (!onPointSelected) return
@@ -638,14 +637,9 @@ export function NetworkCosmograph({
       lastSelectionRef.current = [...filtered]
       ++selectionRequestIdRef.current
 
-      if (filtered.length > 1000) {
-        setIsProcessingSelection(true)
-      }
-
       selectionFromCosmographRef.current = true
 
       if (filtered.length === 0) {
-        setIsProcessingSelection(false)
         onPointSelected(null)
         onSelectionChange?.([])
       } else {
@@ -655,8 +649,6 @@ export function NetworkCosmograph({
         } else {
           onSelectionChange?.(filtered)
         }
-        
-        setIsProcessingSelection(false)
       }
     }
 
@@ -969,7 +961,7 @@ export function NetworkCosmograph({
         onColorByResolved?.(resolvedColor)
         onColumnDisplayNames?.(configJson.columnDisplayNames || {})
         onColumnCategories?.(configJson.columnCategories || {})
-        const numCols = new Set(configJson.numericColumns || [])
+        const numCols = new Set<string>(configJson.numericColumns || [])
         setNumericColumns(numCols)
         onNumericColumns?.(numCols)
         setLogColumnMapping(configJson.logColumnMapping || {})
@@ -1340,7 +1332,7 @@ export function NetworkCosmograph({
               <CosmographTypeColorLegend 
                 key={`legend-${legendSortBy}-${colorBy}`}
                 sortBy={legendSortBy === "label" ? colorBy : "count"}
-                sortOrder={legendSortBy === "label" ? "ASC" : "DESC"}
+                sortOrder={legendSortBy === "label" ? "asc" : "desc"}
               />
             )}
             <div className="flex items-center gap-2 pt-2 text-xs opacity-70">
